@@ -81,7 +81,19 @@ DATABASES = {
         'PASSWORD': os.environ['POSTGRES_PASSWORD'],
         'HOST': os.environ['DB_HOST'],
         'PORT': os.environ['DB_PORT']
-    }
+    },
+    'mongo': {
+            'ENGINE': 'djongo',
+            'NAME': os.environ['MONGO_DB'],
+            'ENFORCE_SCHEMA': False,
+            'CLIENT': {
+                'host': 'mongo_db',
+                'port': 27017,
+                'username': os.environ['MONGO_USER'],
+                'password': os.environ['MONGO_PASSWORD'],
+                'authSource': 'admin',
+            }
+        }
 }
 
 
