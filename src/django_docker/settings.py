@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-5&pm0r=zw-+%+5*w9f&mwrae__=3a-fichr&l@skox88*#z&0l
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -63,7 +63,7 @@ ROOT_URLCONF = 'django_docker.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -74,6 +74,9 @@ TEMPLATES = [
         },
     },
 ]
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 WSGI_APPLICATION = 'django_docker.wsgi.application'
 
@@ -90,18 +93,18 @@ DATABASES = {
         'HOST': os.environ['DB_HOST'],
         'PORT': os.environ['DB_PORT']
     },
-    'mongo': {
-            'ENGINE': 'djongo',
-            'NAME': os.environ['MONGO_DB'],
-            'ENFORCE_SCHEMA': False,
-            'CLIENT': {
-                'host': 'mongo_db',
-                'port': 27017,
-                'username': os.environ['MONGO_USER'],
-                'password': os.environ['MONGO_PASSWORD'],
-                'authSource': 'admin',
-            }
-        }
+    # 'mongo': {
+    #         'ENGINE': 'djongo',
+    #         'NAME': os.environ['MONGO_DB'],
+    #         'ENFORCE_SCHEMA': False,
+    #         'CLIENT': {
+    #             'host': 'mongo_db',
+    #             'port': 27017,
+    #             'username': os.environ['MONGO_USER'],
+    #             'password': os.environ['MONGO_PASSWORD'],
+    #             'authSource': 'admin',
+    #         }
+    #     }
 }
 
 

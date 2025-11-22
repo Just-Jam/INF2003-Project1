@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Deactivate account{% endblock %}
+{% block content %}
+<h2>Deactivate Account</h2>
+<p>This cannot be undone.</p>
+<form id="delForm">
+  <div class="mb-3">
+    <label>Enter your password to confirm</label>
+    <input type="password" class="form-control" name="password" required>
+  </div>
+  <button class="btn btn-danger">Deactivate</button>
+  <div id="error" class="text-danger mt-2"></div>
+</form>
+
+<script>
+document.getElementById('delForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target).entries());
+  try{
+    await apiCall('/api/deactivate-account/', 'POST', data);
+    localStorage.removeItem('token');
+    alert('Account deactivated');
+    location.href = '/';
+  }catch(err){
+    document.getElementById('error').innerText = err.detail || JSON.stringify(err);
+  }
+});
+</script>
+{% endblock %}

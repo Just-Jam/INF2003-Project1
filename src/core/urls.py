@@ -1,5 +1,8 @@
 from django.urls import path
 from django.urls import path
+
+app_name = "core"
+
 from .views import (
     DeactivateAccountView,
     ProfileView,

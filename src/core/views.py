@@ -8,6 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status, permissions, generics
 from rest_framework.authtoken.models import Token
 
+from django.http import HttpResponse
+
 from .serializers import (
     DeactivateAccountSerializer,
     RegisterSerializer,

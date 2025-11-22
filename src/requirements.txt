@@ -1,5 +1,5 @@
 Django>=5.0
 psycopg[binary]
-djongo
-pymongo
+psycopg2-binary               # your relational DB driver
+pymongo[srv]==4.10.*          # <-- only new dependency
 djangorestframework

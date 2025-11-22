@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<h2>My Profile</h2>
+<form id="profileForm">
+  <div class="mb-3">
+    <label>Username</label>
+    <input class="form-control" name="username" readonly>
+  </div>
+  <div class="mb-3">
+    <label>Email</label>
+    <input class="form-control" name="email" required>
+  </div>
+  <div class="mb-3">
+    <label>First name</label>
+    <input class="form-control" name="first_name">
+  </div>
+  <div class="mb-3">
+    <label>Last name</label>
+    <input class="form-control" name="last_name">
+  </div>
+  <button class="btn btn-primary">Update</button>
+</form>
+
+<script>
+(async ()=>{
+  // populate fields on load
+  const u = await apiCall('/api/profile/', 'GET');
+  Object.keys(u).forEach(k=>{
+    const el = document.querySelector(`[name="${k}"]`);
+    if(el) el.value = u[k];
+  });
+
+  document.getElementById('profileForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target).entries());
+    await apiCall('/api/profile/', 'PATCH', data);
+    alert('Profile updated');
+  });
+})();
+</script>
+{% endblock %}

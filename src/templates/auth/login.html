@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<h2>Login</h2>
+<form id="loginForm">
+  <div class="mb-3">
+    <label>Email</label>
+    <input type="email" class="form-control" name="email" required>
+  </div>
+  <div class="mb-3">
+    <label>Password</label>
+    <input type="password" class="form-control" name="password" required>
+  </div>
+  <button class="btn btn-primary">Sign in</button>
+  <div id="error" class="text-danger mt-2"></div>
+</form>
+
+<!-- file: src/templates/auth/login.html -->
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target).entries());
+  try{
+    // use the namespaced API URL
+    await apiCall('{% url "api:login" %}', 'POST', data);
+    localStorage.setItem('token', resp.token);
+    location.href = "{% url 'profile' %}";
+  }catch(err){
+    document.getElementById('error').innerText = err.detail || JSON.stringify(err);
+  }
+});
+</script>
+
+{% endblock %}
