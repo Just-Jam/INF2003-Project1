@@ -1,0 +1,33 @@
+<!-- templates/admin/dashboard.html -->
+{% extends 'admin/base.html' %}
+
+{% block title %}Admin Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <!-- Your dashboard content here -->
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header bg-white">
+                <h6 class="m-0 font-weight-bold text-primary">Welcome to Admin Panel</h6>
+            </div>
+            <div class="card-body">
+                <p>Welcome to the administration dashboard. Use the sidebar to navigate.</p>
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'admin_user_management' %}" class="btn btn-primary w-100">
+                            <i class="fas fa-users me-2"></i>Manage Users
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'admin_create_user' %}" class="btn btn-success w-100">
+                            <i class="fas fa-user-plus me-2"></i>Create User
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

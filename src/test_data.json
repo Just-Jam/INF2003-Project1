@@ -1,0 +1,17 @@
+{
+  "register":
+          {
+    "email": "test@example.com",
+   "first_name": "John",
+   "last_name": "Doe",
+   "password": "securepassword123",
+   "password_confirm": "securepassword123"
+  },
+  "login":
+          {
+    "email": "test@example.com",
+      "password": "securepassword123"
+  }
+
+}
+

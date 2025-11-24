@@ -1,34 +1,81 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Login{% endblock %}
 {% block content %}
-<h2>Login</h2>
-<form id="loginForm">
-  <div class="mb-3">
-    <label>Email</label>
-    <input type="email" class="form-control" name="email" required>
-  </div>
-  <div class="mb-3">
-    <label>Password</label>
-    <input type="password" class="form-control" name="password" required>
-  </div>
-  <button class="btn btn-primary">Sign in</button>
-  <div id="error" class="text-danger mt-2"></div>
-</form>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h2>Login</h2>
 
-<!-- file: src/templates/auth/login.html -->
+    <!-- Option 1: Traditional Django form with CSRF -->
+    <form method="post" id="loginForm">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label>Email</label>
+        <input type="email" class="form-control" name="email" required>
+      </div>
+      <div class="mb-3">
+        <label>Password</label>
+        <input type="password" class="form-control" name="password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Sign in</button>
+      <div id="error" class="text-danger mt-2"></div>
+    </form>
+  </div>
+</div>
+
 <script>
-document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const data = Object.fromEntries(new FormData(e.target).entries());
-  try{
-    // use the namespaced API URL
-    await apiCall('{% url "api:login" %}', 'POST', data);
-    localStorage.setItem('token', resp.token);
-    location.href = "{% url 'profile' %}";
-  }catch(err){
-    document.getElementById('error').innerText = err.detail || JSON.stringify(err);
+
+  const form = e.target;
+  const formData = new FormData(form);
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const errorDiv = document.getElementById('error');
+
+  // Show loading
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in...';
+  errorDiv.textContent = '';
+
+  try {
+    // Convert FormData to JSON
+    const data = Object.fromEntries(formData.entries());
+
+    // Use fetch with CSRF token from the form
+    const response = await fetch('{% url "api:auth-login" %}', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw result;
+    }
+
+    // Store token and user data
+    localStorage.setItem('token', result.token);
+    if (result.user_id) {
+      localStorage.setItem('user_id', result.user_id);
+      localStorage.setItem('email', result.email);
+      localStorage.setItem('first_name', result.first_name);
+      localStorage.setItem('last_name', result.last_name);
+    }
+
+    // Redirect on success
+    window.location.href = "{% url 'profile' %}";
+
+  } catch (err) {
+    errorDiv.textContent = err.detail || 'Login failed. Please try again.';
+    console.error('Login error:', err);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign in';
   }
 });
 </script>
-
 {% endblock %}

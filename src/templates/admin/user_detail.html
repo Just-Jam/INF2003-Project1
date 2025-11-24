@@ -1,0 +1,104 @@
+<!-- templates/admin/user_detail.html -->
+{% extends 'admin/base.html' %}
+
+{% block title %}User Details - {{ managed_user.email }}{% endblock %}
+{% block page_title %}User Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-white">
+                <h6 class="m-0 font-weight-bold text-primary">Edit User</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" name="first_name"
+                                   value="{{ managed_user.first_name }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" name="last_name"
+                                   value="{{ managed_user.last_name }}" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email"
+                               value="{{ managed_user.email }}" required>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_active"
+                                       id="is_active" {% if managed_user.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">
+                                    Active
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_staff"
+                                       id="is_staff" {% if managed_user.is_staff %}checked{% endif %}>
+                                <label class="form-check-label" for="is_staff">
+                                    Staff Member
+                                </label>
+                            </div>
+                        </div>
+                        {% if can_edit_superuser %}
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_superuser"
+                                       id="is_superuser" {% if managed_user.is_superuser %}checked{% endif %}>
+                                <label class="form-check-label" for="is_superuser">
+                                    Superuser
+                                </label>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'admin_user_management' %}" class="btn btn-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Update User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-white">
+                <h6 class="m-0 font-weight-bold text-primary">User Information</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">User ID:</dt>
+                    <dd class="col-sm-7"><code>{{ managed_user.user_id }}</code></dd>
+
+                    <dt class="col-sm-5">Joined:</dt>
+                    <dd class="col-sm-7">{{ managed_user.created_at|date:"M d, Y H:i" }}</dd>
+
+                    <dt class="col-sm-5">Last Login:</dt>
+                    <dd class="col-sm-7">
+                        {% if managed_user.last_login %}
+                            {{ managed_user.last_login|date:"M d, Y H:i" }}
+                        {% else %}
+                            <span class="text-muted">Never</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
