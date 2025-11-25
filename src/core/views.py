@@ -14,10 +14,10 @@ from rest_framework.decorators import permission_classes
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.contrib.auth import authenticate, get_user_model
 from rest_framework.authtoken.models import Token
 from .serializers import *
 
+from django.contrib.auth import authenticate, get_user_model, login as django_login
 from django.contrib.auth import logout as auth_logout
 from django.shortcuts import redirect
 from django.contrib import messages
@@ -56,27 +56,25 @@ class LoginView(APIView):
         if not email or not password:
             return Response({"detail": "Email and password required."}, status=400)
 
-        # ✅ Use custom User model with email lookup
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({"detail": "Invalid credentials."}, status=400)
 
-        # ✅ Authenticate using email (since your custom user uses email as USERNAME_FIELD)
-        user = authenticate(request, username=email, password=password)  # Use email as username
-
+        user = authenticate(request, username=email, password=password)
         if not user:
             return Response({"detail": "Invalid credentials."}, status=400)
 
         if not user.is_active:
-            return Response({"detail": "Account is deactivated. Please contact support."},
-                            status=403)
+            return Response({"detail": "Account is deactivated. Please contact support."}, status=403)
+
+        # Establish a Django session so template views see the user as logged in
+        django_login(request, user)
 
         token, _ = Token.objects.get_or_create(user=user)
-
         return Response({
             "token": token.key,
-            "user_id": str(user.user_id),  # ✅ Include UUID
+            "user_id": str(user.user_id),
             "email": user.email,
             "first_name": user.first_name,
             "last_name": user.last_name
@@ -124,20 +122,6 @@ class ChangePasswordView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
-class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        if request.auth:
-            request.auth.delete()
-
-        return Response(
-            {"detail": "Logged out successfully."},
-            status=status.HTTP_200_OK,
-        )
-
-
 class DeactivateAccountView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -156,31 +140,8 @@ class DeactivateAccountView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
-
-    @action(detail=False, methods=['post'])
-    def register(self, request):
-        # Prevent superuser creation via API
-        if any(key in request.data for key in ['is_staff', 'is_superuser', 'is_active']):
-            return Response(
-                {"detail": "Cannot set privileged fields via registration."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            token, _ = Token.objects.get_or_create(user=user)
-            return Response({
-                "user_id": user.user_id,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "token": token.key,
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'])
     def login(self, request):
@@ -196,16 +157,16 @@ class AuthViewSet(viewsets.ViewSet):
             return Response({"detail": "Invalid credentials."}, status=400)
 
         user = authenticate(request, username=email, password=password)
-
         if not user:
             return Response({"detail": "Invalid credentials."}, status=400)
 
         if not user.is_active:
             return Response({"detail": "Account is deactivated. Please contact support."}, status=403)
 
-        token, _ = Token.objects.get_or_create(user=user)
+        # Create session for template auth
+        django_login(request, user)
 
-        # Return complete user data
+        token, _ = Token.objects.get_or_create(user=user)
         return Response({
             "token": token.key,
             "user_id": str(user.user_id),
@@ -214,11 +175,6 @@ class AuthViewSet(viewsets.ViewSet):
             "last_name": user.last_name
         }, status=200)
 
-    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
-    def logout(self, request):
-        if request.auth:
-            request.auth.delete()
-        return Response({"detail": "Logged out successfully."}, status=200)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -288,13 +244,17 @@ def logout_view(request):
     messages.success(request, "You have been logged out successfully.")
     return redirect('login')
 
-# API Logout view (for token-based logout)
+from rest_framework.authentication import TokenAuthentication
+
 class LogoutView(APIView):
+    authentication_classes = [TokenAuthentication]  # ✅ Add this
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        print(f"Logout requested by user: {request.user.email}")  # Debug
         if request.auth:
             request.auth.delete()
+            print("Token deleted successfully")  # Debug
         return Response(
             {"detail": "Logged out successfully."},
             status=status.HTTP_200_OK,
@@ -306,7 +266,7 @@ def admin_required(function=None):
     """Decorator to ensure user is admin/superuser"""
     actual_decorator = user_passes_test(
         lambda u: u.is_authenticated and (u.is_staff or u.is_superuser),
-        login_url='/admin/login/'
+        login_url='/login/'
     )
     if function:
         return actual_decorator(function)

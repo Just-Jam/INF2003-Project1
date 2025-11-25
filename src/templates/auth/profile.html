@@ -1,42 +1,134 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Profile{% endblock %}
 {% block content %}
-<h2>My Profile</h2>
-<form id="profileForm">
-  <div class="mb-3">
-    <label>Username</label>
-    <input class="form-control" name="username" readonly>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">My Profile</h2>
+        <form id="profileForm">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input class="form-control" name="email" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">First name</label>
+            <input class="form-control" name="first_name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Last name</label>
+            <input class="form-control" name="last_name">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Update Profile</button>
+          <div id="error" class="alert alert-danger mt-3" style="display: none;"></div>
+          <div id="success" class="alert alert-success mt-3" style="display: none;"></div>
+        </form>
+      </div>
+    </div>
   </div>
-  <div class="mb-3">
-    <label>Email</label>
-    <input class="form-control" name="email" required>
-  </div>
-  <div class="mb-3">
-    <label>First name</label>
-    <input class="form-control" name="first_name">
-  </div>
-  <div class="mb-3">
-    <label>Last name</label>
-    <input class="form-control" name="last_name">
-  </div>
-  <button class="btn btn-primary">Update</button>
-</form>
+</div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-(async ()=>{
-  // populate fields on load
-  const u = await apiCall('/api/profile/', 'GET');
-  Object.keys(u).forEach(k=>{
-    const el = document.querySelector(`[name="${k}"]`);
-    if(el) el.value = u[k];
-  });
+document.addEventListener('DOMContentLoaded', async function() {
+  const profileForm = document.getElementById('profileForm');
+  const errorDiv = document.getElementById('error');
+  const successDiv = document.getElementById('success');
 
-  document.getElementById('profileForm').addEventListener('submit', async (e)=>{
+  // Get CSRF token
+  function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+  }
+
+  // Get auth token
+  function getAuthToken() {
+    return localStorage.getItem('token');
+  }
+
+  // API call function
+  async function apiCall(endpoint, method = 'GET', body = null) {
+    const url = `/api${endpoint}`;
+    const token = getAuthToken();
+
+    const config = {
+      method,
+      headers: {
+        'X-CSRFToken': getCSRFToken(),
+        'Content-Type': 'application/json',
+      }
+    };
+
+    if (token) {
+      config.headers['Authorization'] = `Token ${token}`;
+    }
+
+    if (body && method !== 'GET') {
+      config.body = JSON.stringify(body);
+    }
+
+    const resp = await fetch(url, config);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw data;
+    }
+    return data;
+  }
+
+  try {
+    // ✅ Use correct endpoint: /api/users/profile/
+    const userData = await apiCall('/users/profile/', 'GET');
+
+    // Populate form fields
+    document.querySelector('[name="email"]').value = userData.email || '';
+    document.querySelector('[name="first_name"]').value = userData.first_name || '';
+    document.querySelector('[name="last_name"]').value = userData.last_name || '';
+
+  } catch (error) {
+    console.error('Error loading profile:', error);
+    errorDiv.textContent = 'Failed to load profile: ' + (error.detail || error.message);
+    errorDiv.style.display = 'block';
+  }
+
+  // Handle form submission
+  profileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = Object.fromEntries(new FormData(e.target).entries());
-    await apiCall('/api/profile/', 'PATCH', data);
-    alert('Profile updated');
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const formData = new FormData(e.target);
+
+    // Clear messages
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+
+    // Show loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Updating...';
+
+    try {
+      const data = {
+        first_name: formData.get('first_name'),
+        last_name: formData.get('last_name')
+      };
+
+      // ✅ Use correct endpoint: /api/users/profile/
+      await apiCall('/users/profile/', 'PATCH', data);
+
+      successDiv.textContent = 'Profile updated successfully!';
+      successDiv.style.display = 'block';
+
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      errorDiv.textContent = 'Failed to update profile: ' + (error.detail || error.message);
+      errorDiv.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Update Profile';
+    }
   });
-})();
+});
 </script>
 {% endblock %}

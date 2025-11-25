@@ -16,30 +16,39 @@ Including another URLconf
 """
 # django_project/urls.py
 
+# django_project/urls.py
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
-from core.views import logout_view  # Import the logout view
+from core.views import (
+    logout_view,
+    admin_dashboard,
+    user_management,
+    user_detail,
+    create_user,
+    toggle_user_status
+)
 
 urlpatterns = [
-    # Frontend pages
+    # Frontend pages (serving HTML templates)
     path("", TemplateView.as_view(template_name="home.html"), name="home"),
     path("register/", TemplateView.as_view(template_name="auth/register.html"), name="register"),
     path("login/", TemplateView.as_view(template_name="auth/login.html"), name="login"),
     path("profile/", TemplateView.as_view(template_name="auth/profile.html"), name="profile"),
     path("change-password/", TemplateView.as_view(template_name="auth/change_password.html"), name="change_password"),
     path("deactivate/", TemplateView.as_view(template_name="auth/deactivate.html"), name="deactivate"),
-    path("logout/", logout_view, name="logout"),  # Add this line
+    path("logout/", logout_view, name="logout"),
 
-    # Admin pages
-    path("admin/", include([
-        path("", TemplateView.as_view(template_name="admin/dashboard.html"), name="admin_home"),
-        path("users/", TemplateView.as_view(template_name="admin/user_management.html"), name="admin_users"),
-    ])),
+    # Admin pages (using actual view functions with authentication)
+    path("admin/", admin_dashboard, name="admin_home"),
+    path("admin/users/", user_management, name="admin_user_management"),
+    path("admin/users/create/", create_user, name="admin_create_user"),
+    path("admin/users/<uuid:user_id>/", user_detail, name="admin_user_detail"),
+    path("admin/users/<uuid:user_id>/toggle-status/", toggle_user_status, name="admin_toggle_user_status"),
 
-    # Django admin
+    # Django admin (using different path to avoid conflict with custom admin)
     path("django-admin/", admin.site.urls),
 
     # API routes
-    path("api/", include("core.urls")),
+    path("api/", include(("core.urls", "core"), namespace="api")),
 ]
