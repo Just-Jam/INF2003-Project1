@@ -1,6 +1,5 @@
 # mongo_repositories.py
-from .mongo import mongo_db  # Import your existing connection
-from bson import ObjectId
+from .connection import mongo_db  # Import your existing connection
 import uuid
 from datetime import datetime
 from typing import List, Dict, Optional

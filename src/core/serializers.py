@@ -2,9 +2,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-import re
 from .models import Order, OrderItem
-from .mongo_repositories import product_repo
+from .mongo.mongo_repositories import product_repo
 
 User = get_user_model()
 

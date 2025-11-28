@@ -1,19 +1,44 @@
 # src/mongo_scripts/import_all_data.py
-import os
+import os, sys
+from datetime import datetime
 import csv
 from pathlib import Path
 from pymongo import MongoClient
 
-#Mongo connection(local)
-client = MongoClient("mongodb://localhost:27017/")
-db = client["mongo_database"]
+if len(sys.argv) > 1 and sys.argv[1] == "local":
+    # Mongo connection(local)
+    client = MongoClient("mongodb://localhost:27017/")
+    db = client["mongo_database"]
+else:
+    # --- Connection Setup ---
+    # Always use environment variables and default MONGO_HOST to 'mongo' for Docker.
+    MONGO_HOST = os.getenv('MONGO_HOST', 'mongo')
+    MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
+    MONGO_USER = os.getenv('MONGO_USER')
+    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD')
+    MONGO_DB = os.getenv('MONGO_DB', 'mongo_database')
 
+    # Connect to MongoDB
+    client = MongoClient(
+        host=MONGO_HOST,
+        port=MONGO_PORT,
+        username=MONGO_USER,
+        password=MONGO_PASSWORD,
+        authSource='admin'
+    )
+    db = client[MONGO_DB]
+
+# External data collections
 amazon_categories_col = db["amazon_categories"]
 amazon_products_col = db["amazon_products"]
 fashion_items_col = db["fashion_items"]
 
-BASE_DIR = Path(__file__).resolve().parent.parent  # this is src/
-DATA_DIR = BASE_DIR / "data"
+# Your app collections (don't touch these during import)
+app_categories_col = db["categories"]
+app_products_col = db["products"]
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "datasets"
 
 
 def parse_float(value):
@@ -38,6 +63,7 @@ def parse_int(value):
 
 def import_amazon_categories():
     print("Importing amazon_categories.csv ...")
+    # Only drop if you want fresh import each time, otherwise consider updating
     amazon_categories_col.drop()
 
     path = DATA_DIR / "amazon_categories.csv"
@@ -48,6 +74,8 @@ def import_amazon_categories():
             doc = {
                 "category_id": parse_int(row["id"]),
                 "name": row["category_name"],
+                "data_source": "amazon",  # Add source identifier
+                "imported_at": datetime.now()
             }
             docs.append(doc)
 
@@ -84,6 +112,8 @@ def import_amazon_products(batch_size=1000):
                     "is_best_seller": str(row["isBestSeller"]).strip().lower() == "true",
                     "bought_last_month": parse_int(row["boughtInLastMonth"]),
                 },
+                "data_source": "amazon",  # Add source identifier
+                "imported_at": datetime.now()
             }
 
             batch.append(doc)
@@ -92,7 +122,6 @@ def import_amazon_products(batch_size=1000):
                 count += len(batch)
                 batch = []
 
-        # leftover
         if batch:
             amazon_products_col.insert_many(batch)
             count += len(batch)
@@ -148,6 +177,8 @@ def import_fashion_dataset(batch_size=1000):
                 "sell_price": sell_price_val,
                 "discount_percent": discount_percent,
                 "category": row["Category"],
+                "data_source": "fashion_dataset",  # Add source identifier
+                "imported_at": datetime.now()
             }
 
             batch.append(doc)
@@ -163,8 +194,32 @@ def import_fashion_dataset(batch_size=1000):
     print(f"Inserted {count} fashion_items documents.")
 
 
+def create_indexes():
+    """Create indexes for better query performance"""
+    print("Creating indexes...")
+
+    # Amazon collections
+    amazon_categories_col.create_index("category_id", unique=True)
+    amazon_products_col.create_index("asin", unique=True)
+    amazon_products_col.create_index("category_id")
+
+    # Fashion collection
+    fashion_items_col.create_index("brand")
+    fashion_items_col.create_index("category")
+
+    # Your app collections
+    app_categories_col.create_index("category_name", unique=True)
+    app_products_col.create_index("sku", unique=True)
+    app_products_col.create_index("categories")
+
+    print("Indexes created successfully.")
+
+
 if __name__ == "__main__":
+    from datetime import datetime
+
     import_amazon_categories()
     import_amazon_products()
     import_fashion_dataset()
+    create_indexes()
     print("All CSV data imported into mongo_database.")

@@ -1,28 +1,27 @@
 # core/views.py
-from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status, permissions, generics
-from rest_framework.decorators import permission_classes
+from rest_framework import permissions, generics
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 
-from .mongo_repositories import product_repo
 from .serializers import *
 
 from django.contrib.auth import authenticate, get_user_model, login as django_login
 from django.contrib.auth import logout as auth_logout
 from django.shortcuts import redirect
 from django.contrib import messages
+
+from .mongo.unified_repositories import UnifiedProductRepository
 
 #Get your custom User model
 User = get_user_model()
@@ -514,3 +513,39 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(order)
         return Response(serializer.data)
+
+
+class UnifiedSearchView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        search_term = request.query_params.get('q', '')
+        source = request.query_params.get('source')  # 'app', 'amazon', 'fashion', or None for all
+        limit = int(request.query_params.get('limit', 50))
+
+        if not search_term:
+            return Response(
+                {'error': 'Search term is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        repo = UnifiedProductRepository()
+
+        try:
+            if source:
+                results = repo.search_products_by_source(search_term, source, limit)
+            else:
+                results = repo.search_all_products(search_term, limit)
+
+            return Response({
+                'search_term': search_term,
+                'source': source or 'all',
+                'results': results,
+                'total_count': len(results)
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': f'Search failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

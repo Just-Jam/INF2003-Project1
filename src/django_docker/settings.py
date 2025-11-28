@@ -29,7 +29,6 @@ ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
 
 
 # Application definition
-AUTH_USER_MODEL = 'core.User'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -43,7 +42,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
 ]
 
-
+AUTH_USER_MODEL = 'core.User'
 
 # settings.py
 REST_FRAMEWORK = {

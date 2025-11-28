@@ -6,6 +6,7 @@ services:
       - 8000:8000
     volumes:
       - ./src:/app
+      - ./src/datasets:/app/datasets
     depends_on:
       db:
         condition: service_healthy

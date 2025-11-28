@@ -1,5 +1,5 @@
 # order_services.py
-from .mongo_repositories import product_repo
+from .mongo.mongo_repositories import product_repo
 from django.db import transaction
 from decimal import Decimal
 

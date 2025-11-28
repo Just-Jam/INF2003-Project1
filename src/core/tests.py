@@ -1,11 +1,11 @@
 # tests.py
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from .models import User, Address, Order, OrderItem
-from .mongo_repositories import category_repo, product_repo
-from .mongo_serializers import MongoProductSerializer
+from .models import Address, Order, OrderItem, User
+from .mongo.mongo_repositories import category_repo, product_repo
+from .mongo.mongo_serializers import MongoProductSerializer
 from .order_service import OrderService
-from .mongo import mongo_db
+from .mongo.connection import mongo_db
 
 def cleanup_mongo_test_data():
     """Clean up MongoDB test data before tests run"""

@@ -1,5 +1,4 @@
 # core/urls.py
-# core/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
@@ -14,6 +13,7 @@ from .views import (
     DeactivateAccountView,
     OrderViewSet,
     AdminOrderViewSet,
+    UnifiedSearchView
 )
 
 router = DefaultRouter()
@@ -35,6 +35,7 @@ urlpatterns = [
     path('users/profile/', ProfileView.as_view(), name='api-profile'),
     path('users/change-password/', ChangePasswordView.as_view(), name='api-change-password'),
     path('users/deactivate/', DeactivateAccountView.as_view(), name='api-deactivate'),
+    path('products/search/', UnifiedSearchView.as_view(), name='products-unified-search'),
 ]
 
 # Add additional API endpoints manually:
