@@ -11,13 +11,17 @@ from .views import (
     LoginView,
     ProfileView,
     ChangePasswordView,
-    DeactivateAccountView
+    DeactivateAccountView,
+    OrderViewSet,
+    AdminOrderViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'users', UserViewSet, basename='users')
 router.register(r'admin-users', AdminUserViewSet, basename='admin-users')
+router.register(r'orders', OrderViewSet, basename='order')
+router.register(r'admin/orders', AdminOrderViewSet, basename='admin-order')
 
 # API URL patterns
 urlpatterns = [

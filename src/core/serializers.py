@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 import re
+from .models import Order, OrderItem
+from .mongo_repositories import product_repo
 
 User = get_user_model()
 
@@ -106,3 +108,106 @@ class StaffUserSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+
+# serializers.py - Add these serializers
+class OrderItemCreateSerializer(serializers.Serializer):
+    product_sku = serializers.CharField(max_length=50)
+    quantity = serializers.IntegerField(min_value=1)
+
+    def validate_product_sku(self, value):
+        """Validate product exists in MongoDB"""
+        product = product_repo.get_product_by_sku(value)
+        if not product:
+            raise serializers.ValidationError("Product with this SKU does not exist")
+        if not product.get('is_active', False):
+            raise serializers.ValidationError("Product is not active")
+        return value
+
+
+class OrderCreateSerializer(serializers.ModelSerializer):
+    items = OrderItemCreateSerializer(many=True)
+
+    class Meta:
+        model = Order
+        fields = ['shipping_address', 'billing_address', 'items']
+
+    def validate(self, data):
+        """Validate the entire order"""
+        items_data = data.get('items', [])
+
+        if not items_data:
+            raise serializers.ValidationError("Order must contain at least one item")
+
+        # Validate items against MongoDB
+        is_valid, errors, _ = OrderService.validate_order_items(items_data)
+        if not is_valid:
+            raise serializers.ValidationError(errors)
+
+        return data
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        user = self.context['request'].user
+
+        try:
+            order = OrderService.create_order(validated_data, user, items_data)
+            return order
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    current_product_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'order_item_id', 'product_sku', 'product_name',
+            'product_price', 'quantity', 'unit_price', 'subtotal',
+            'current_product_details'
+        ]
+        read_only_fields = fields
+
+    def get_current_product_details(self, obj):
+        """Get current product info from MongoDB"""
+        product = product_repo.get_product_by_sku(obj.product_sku)
+        if product:
+            return {
+                'current_name': product.get('name'),
+                'current_price': float(product.get('price', 0)),
+                'is_active': product.get('is_active', False),
+                'in_stock': product.get('stock_quantity', 0) > 0
+            }
+        return None
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    shipping_address_details = serializers.SerializerMethodField()
+    billing_address_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            'order_id', 'user', 'user_email', 'order_date', 'total_amount',
+            'status', 'shipping_address', 'billing_address', 'items',
+            'shipping_address_details', 'billing_address_details'
+        ]
+        read_only_fields = ['order_id', 'order_date', 'total_amount']
+
+    def get_shipping_address_details(self, obj):
+        return self._get_address_details(obj.shipping_address)
+
+    def get_billing_address_details(self, obj):
+        return self._get_address_details(obj.billing_address)
+
+    def _get_address_details(self, address):
+        return {
+            'street': address.street,
+            'city': address.city,
+            'state': address.state,
+            'zip_code': address.zip_code,
+            'country': address.country
+        }

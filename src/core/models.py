@@ -73,59 +73,6 @@ class Address(models.Model):
     def __str__(self):
         return f"{self.street}, {self.city}, {self.state}"
 
-
-class Category(models.Model):
-    category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    category_name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
-    parent_category = models.ForeignKey(
-        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subcategories'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'categories'
-        verbose_name_plural = 'categories'
-
-    def __str__(self):
-        return self.category_name
-
-
-# models.py - Updated Product model
-class Product(models.Model):
-    sku = models.CharField(primary_key=True, max_length=50, verbose_name='Product SKU')
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    price = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        validators=[MinValueValidator(0)]
-    )
-    stock_quantity = models.IntegerField(
-        default=0,
-        validators=[MinValueValidator(0)]  # Also validate stock can't be negative
-    )
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    categories = models.ManyToManyField(Category, related_name='products', blank=True)
-
-    class Meta:
-        db_table = 'products'
-
-    def __str__(self):
-        return f"{self.name} ({self.sku})"
-
-    def clean(self):
-        """Custom validation that runs during full_clean()"""
-        if self.price < 0:
-            raise ValidationError({'price': 'Price cannot be negative.'})
-        if self.stock_quantity < 0:
-            raise ValidationError({'stock_quantity': 'Stock quantity cannot be negative.'})
-        super().clean()
-
-
 class Order(models.Model):
     ORDER_STATUS = [
         ('pending', 'Pending'),
@@ -158,11 +105,8 @@ class Order(models.Model):
         ordering = ['-order_date']
 
     def update_total_amount(self):
-        # Use the related name from OrderItem
-        from django.db.models import Sum
-        total = self.order_items.aggregate(
-            total=Sum(models.F('quantity') * models.F('unit_price'))
-        )['total'] or 0
+        """Update total amount from order items"""
+        total = sum(item.subtotal for item in self.order_items.all())
         self.total_amount = total
         self.save(update_fields=['total_amount'])
 
@@ -172,18 +116,45 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_items')  # Changed related_name
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, to_field='sku')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_items')
+
+    # Reference to MongoDB product (not a ForeignKey)
+    product_sku = models.CharField(
+        max_length=50,
+        default="UNKNOWN_SKU"
+    )
+    # MongoDB product reference
+    product_name = models.CharField(
+        max_length=255,
+        default="Unknown Product"  # Add default value
+    )  # Denormalized name at time of order
+    product_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0.00  # Add default value for product_price too
+    )  # Price at time of order
+
     quantity = models.IntegerField(validators=[MinValueValidator(1)])
-    unit_price = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0.00  # Add default for unit_price
+    )
 
     class Meta:
         db_table = 'order_items'
-        unique_together = ['order', 'product']
+        unique_together = ['order', 'product_sku']
 
     @property
     def subtotal(self):
         return self.quantity * self.unit_price
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.name}"
+        return f"{self.quantity} x {self.product_name}"
+
+    def save(self, *args, **kwargs):
+        """Ensure denormalized data consistency"""
+        self.product_price = self.unit_price
+        super().save(*args, **kwargs)

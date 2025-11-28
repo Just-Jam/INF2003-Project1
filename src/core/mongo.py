@@ -12,3 +12,4 @@ _client = MongoClient(
 
 # pick the same database name you used with djongo
 mongo_db = _client[os.getenv('MONGO_DB', 'my_db')]
+

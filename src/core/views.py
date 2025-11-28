@@ -15,6 +15,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
+
+from .mongo_repositories import product_repo
 from .serializers import *
 
 from django.contrib.auth import authenticate, get_user_model, login as django_login
@@ -439,3 +441,76 @@ class AdminUserViewSet(viewsets.ViewSet):
             return Response({'error': 'Invalid action'}, status=400)
 
         return Response({'message': message})
+
+
+# views.py - Update your OrderViewSet
+class OrderViewSet(viewsets.ModelViewSet):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).prefetch_related('order_items')
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return OrderCreateSerializer
+        return OrderSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Create a new order with MongoDB product validation"""
+        try:
+            return super().create(request, *args, **kwargs)
+        except serializers.ValidationError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['get'])
+    def enriched_items(self, request, pk=None):
+        """Get order items enriched with current MongoDB product data"""
+        order = self.get_object()
+        enriched_items = OrderService.get_product_details_for_order(order)
+        return Response(enriched_items)
+
+    @action(detail=False, methods=['get'])
+    def by_product(self, request):
+        """Get orders containing a specific MongoDB product"""
+        product_sku = request.query_params.get('product_sku')
+        if not product_sku:
+            return Response(
+                {'error': 'product_sku parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        orders = Order.objects.filter(
+            order_items__product_sku=product_sku,
+            user=request.user
+        ).distinct()
+
+        serializer = self.get_serializer(orders, many=True)
+        return Response(serializer.data)
+
+
+class AdminOrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all().prefetch_related('order_items')
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """Update order status"""
+        order = self.get_object()
+        new_status = request.data.get('status')
+
+        if new_status not in dict(Order.ORDER_STATUS):
+            return Response(
+                {'error': 'Invalid status'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = new_status
+        order.save()
+
+        serializer = self.get_serializer(order)
+        return Response(serializer.data)
