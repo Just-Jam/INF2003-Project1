@@ -1,20 +1,7 @@
 # core/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (
-    AuthViewSet,
-    UserViewSet,
-    AdminUserViewSet,
-    LogoutView,
-    RegisterView,
-    LoginView,
-    ProfileView,
-    ChangePasswordView,
-    DeactivateAccountView,
-    OrderViewSet,
-    AdminOrderViewSet,
-    UnifiedSearchView
-)
+from .views import *
 
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
@@ -24,6 +11,7 @@ router.register(r'orders', OrderViewSet, basename='order')
 router.register(r'admin/orders', AdminOrderViewSet, basename='admin-order')
 
 # API URL patterns
+# ALL urls preceded by /api/
 urlpatterns = [
     # Include router URLs
     path('', include(router.urls)),
@@ -36,6 +24,17 @@ urlpatterns = [
     path('users/change-password/', ChangePasswordView.as_view(), name='api-change-password'),
     path('users/deactivate/', DeactivateAccountView.as_view(), name='api-deactivate'),
     path('products/search/', UnifiedSearchView.as_view(), name='products-unified-search'),
+
+    # User endpoints
+    path('addresses/', AddressListCreateAPIView.as_view(), name='address-list-create'),
+    path('addresses/<uuid:address_id>/', AddressDetailAPIView.as_view(), name='address-detail'),
+    path('addresses/<uuid:address_id>/set-default/', SetDefaultAddressAPIView.as_view(),
+         name='set-default-address'),
+
+    # Admin-only endpoints
+    path('admin/addresses/', AdminAddressManagementAPIView.as_view(), name='admin-address-list'),
+    path('admin/addresses/user/<int:user_id>/', AdminAddressManagementAPIView.as_view(),
+         name='admin-user-addresses'),
 ]
 
 # Add additional API endpoints manually:

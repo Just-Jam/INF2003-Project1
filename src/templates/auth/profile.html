@@ -2,29 +2,146 @@
 {% load static %}
 {% block title %}Profile{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-body">
-        <h2 class="card-title text-center mb-4">My Profile</h2>
-        <form id="profileForm">
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <!-- Personal Information Card -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h2 class="card-title text-center mb-4">My Profile</h2>
+          <form id="profileForm">
+            {% csrf_token %}
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Email</label>
+                <input class="form-control" name="email" readonly>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">First name</label>
+                <input class="form-control" name="first_name">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Last name</label>
+                <input class="form-control" name="last_name">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Update Profile</button>
+            <div id="profileError" class="alert alert-danger mt-3" style="display: none;"></div>
+            <div id="profileSuccess" class="alert alert-success mt-3" style="display: none;"></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Address Management Card -->
+      <div class="card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="card-title mb-0">My Addresses</h2>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addressModal" data-action="create">
+              <i class="fas fa-plus"></i> Add Address
+            </button>
+          </div>
+
+          <!-- Addresses List -->
+          <div id="addressesList">
+            <div class="text-center">
+              <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading addresses...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Address Modal -->
+<div class="modal fade" id="addressModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addressModalTitle">Add Address</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="addressForm">
           {% csrf_token %}
+          <input type="hidden" name="address_id" id="addressId">
+
           <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input class="form-control" name="email" readonly>
+            <label class="form-label">Street Address</label>
+            <input type="text" class="form-control" name="street" id="street" required>
           </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">City</label>
+              <input type="text" class="form-control" name="city" id="city" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">State</label>
+              <input type="text" class="form-control" name="state" id="state" required>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">ZIP Code</label>
+              <input type="text" class="form-control" name="zip_code" id="zip_code" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Country</label>
+              <select class="form-control" name="country" id="country" required>
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+                <option value="GB">United Kingdom</option>
+              </select>
+            </div>
+          </div>
+
           <div class="mb-3">
-            <label class="form-label">First name</label>
-            <input class="form-control" name="first_name">
+            <label class="form-label">Address Type</label>
+            <select class="form-control" name="address_type" id="address_type" required>
+              <option value="billing">Billing</option>
+              <option value="shipping">Shipping</option>
+              <option value="both">Both</option>
+            </select>
           </div>
-          <div class="mb-3">
-            <label class="form-label">Last name</label>
-            <input class="form-control" name="last_name">
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="is_default" id="is_default">
+            <label class="form-check-label" for="is_default">
+              Set as default address
+            </label>
           </div>
-          <button type="submit" class="btn btn-primary w-100">Update Profile</button>
-          <div id="error" class="alert alert-danger mt-3" style="display: none;"></div>
-          <div id="success" class="alert alert-success mt-3" style="display: none;"></div>
+
+          <div id="addressError" class="alert alert-danger mt-3" style="display: none;"></div>
+          <div id="addressSuccess" class="alert alert-success mt-3" style="display: none;"></div>
         </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveAddressBtn">Save Address</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete this address? This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete Address</button>
       </div>
     </div>
   </div>
@@ -34,9 +151,21 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
+  // DOM Elements
   const profileForm = document.getElementById('profileForm');
-  const errorDiv = document.getElementById('error');
-  const successDiv = document.getElementById('success');
+  const profileErrorDiv = document.getElementById('profileError');
+  const profileSuccessDiv = document.getElementById('profileSuccess');
+  const addressesList = document.getElementById('addressesList');
+  const addressForm = document.getElementById('addressForm');
+  const addressErrorDiv = document.getElementById('addressError');
+  const addressSuccessDiv = document.getElementById('addressSuccess'); // Add this line
+  const addressModal = new bootstrap.Modal(document.getElementById('addressModal'));
+  const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  const saveAddressBtn = document.getElementById('saveAddressBtn');
+  const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+  let currentAddressId = null;
+  let currentAction = 'create';
 
   // Get CSRF token
   function getCSRFToken() {
@@ -78,33 +207,221 @@ document.addEventListener('DOMContentLoaded', async function() {
     return data;
   }
 
-  try {
-    // ✅ Use correct endpoint: /api/users/profile/
-    const userData = await apiCall('/users/profile/', 'GET');
-
-    // Populate form fields
-    document.querySelector('[name="email"]').value = userData.email || '';
-    document.querySelector('[name="first_name"]').value = userData.first_name || '';
-    document.querySelector('[name="last_name"]').value = userData.last_name || '';
-
-  } catch (error) {
-    console.error('Error loading profile:', error);
-    errorDiv.textContent = 'Failed to load profile: ' + (error.detail || error.message);
-    errorDiv.style.display = 'block';
+  // Load user profile
+  async function loadProfile() {
+    try {
+      const userData = await apiCall('/users/profile/', 'GET');
+      document.querySelector('[name="email"]').value = userData.email || '';
+      document.querySelector('[name="first_name"]').value = userData.first_name || '';
+      document.querySelector('[name="last_name"]').value = userData.last_name || '';
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      profileErrorDiv.textContent = 'Failed to load profile: ' + (error.detail || error.message);
+      profileErrorDiv.style.display = 'block';
+    }
   }
 
-  // Handle form submission
+  // Load addresses
+  async function loadAddresses() {
+    try {
+      const addresses = await apiCall('/addresses/', 'GET');
+      renderAddresses(addresses);
+    } catch (error) {
+      console.error('Error loading addresses:', error);
+      addressesList.innerHTML = `
+        <div class="alert alert-danger">
+          Failed to load addresses: ${error.detail || error.message}
+        </div>
+      `;
+    }
+  }
+
+  // Render addresses list
+  function renderAddresses(addresses) {
+    if (addresses.length === 0) {
+      addressesList.innerHTML = `
+        <div class="text-center py-4">
+          <p class="text-muted">No addresses found. Add your first address to get started.</p>
+        </div>
+      `;
+      return;
+    }
+
+    addressesList.innerHTML = addresses.map(address => `
+      <div class="card mb-3 ${address.is_default ? 'border-primary' : ''}">
+        <div class="card-body">
+          ${address.is_default ? '<span class="badge bg-primary mb-2">Default</span>' : ''}
+          <h6 class="card-title">${address.street}</h6>
+          <p class="card-text mb-1">${address.city}, ${address.state} ${address.zip_code}</p>
+          <p class="card-text mb-1">${address.country}</p>
+          <p class="card-text">
+            <small class="text-muted">Type: ${address.address_type}</small>
+          </p>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-primary edit-address" data-address-id="${address.address_id}">
+              Edit
+            </button>
+            ${!address.is_default ? `
+              <button class="btn btn-outline-success set-default" data-address-id="${address.address_id}">
+                Set Default
+              </button>
+            ` : ''}
+            <button class="btn btn-outline-danger delete-address" data-address-id="${address.address_id}">
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Add event listeners to address buttons
+    document.querySelectorAll('.edit-address').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const addressId = e.target.dataset.addressId;
+        editAddress(addressId);
+      });
+    });
+
+    document.querySelectorAll('.set-default').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const addressId = e.target.dataset.addressId;
+        setDefaultAddress(addressId);
+      });
+    });
+
+    document.querySelectorAll('.delete-address').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const addressId = e.target.dataset.addressId;
+        showDeleteConfirmation(addressId);
+      });
+    });
+  }
+
+  // Edit address
+  async function editAddress(addressId) {
+    try {
+      const address = await apiCall(`/addresses/${addressId}/`, 'GET');
+
+      // Populate form
+      document.getElementById('addressId').value = address.address_id;
+      document.getElementById('street').value = address.street;
+      document.getElementById('city').value = address.city;
+      document.getElementById('state').value = address.state;
+      document.getElementById('zip_code').value = address.zip_code;
+      document.getElementById('country').value = address.country;
+      document.getElementById('address_type').value = address.address_type;
+      document.getElementById('is_default').checked = address.is_default;
+
+      // Update modal title
+      document.getElementById('addressModalTitle').textContent = 'Edit Address';
+      currentAction = 'edit';
+      currentAddressId = addressId;
+
+      addressModal.show();
+    } catch (error) {
+      console.error('Error loading address:', error);
+      alert('Failed to load address: ' + (error.detail || error.message));
+    }
+  }
+
+  // Set default address
+  async function setDefaultAddress(addressId) {
+    try {
+      await apiCall(`/addresses/${addressId}/set-default/`, 'POST');
+      await loadAddresses(); // Reload addresses to reflect changes
+      showAddressMessage('Address set as default successfully!', 'success');
+    } catch (error) {
+      console.error('Error setting default address:', error);
+      showAddressMessage('Failed to set default address: ' + (error.detail || error.message), 'error');
+    }
+  }
+
+  // Show delete confirmation
+  function showDeleteConfirmation(addressId) {
+    currentAddressId = addressId;
+    deleteModal.show();
+  }
+
+  // Delete address
+  async function deleteAddress() {
+    try {
+      await apiCall(`/addresses/${currentAddressId}/`, 'DELETE');
+      deleteModal.hide();
+      await loadAddresses(); // Reload addresses
+      showAddressMessage('Address deleted successfully!', 'success');
+    } catch (error) {
+      console.error('Error deleting address:', error);
+      showAddressMessage('Failed to delete address: ' + (error.detail || error.message), 'error');
+    }
+  }
+
+  // Show address message
+  function showAddressMessage(message, type) {
+    addressErrorDiv.style.display = 'none';
+    addressSuccessDiv.style.display = 'none';
+
+    if (type === 'success') {
+      addressSuccessDiv.textContent = message;
+      addressSuccessDiv.style.display = 'block';
+    } else {
+      addressErrorDiv.textContent = message;
+      addressErrorDiv.style.display = 'block';
+    }
+  }
+
+  // Reset address form
+function resetAddressForm() {
+  addressForm.reset();
+  document.getElementById('addressId').value = '';
+  document.getElementById('addressModalTitle').textContent = 'Add Address';
+  currentAction = 'create';
+  currentAddressId = null;
+
+  // Fix: Use the correct variable names
+  addressErrorDiv.style.display = 'none';
+  addressSuccessDiv.style.display = 'none';
+}
+
+  // Save address (create or update)
+  async function saveAddress() {
+    const formData = new FormData(addressForm);
+
+    const addressData = {
+      street: formData.get('street'),
+      city: formData.get('city'),
+      state: formData.get('state'),
+      zip_code: formData.get('zip_code'),
+      country: formData.get('country'),
+      address_type: formData.get('address_type'),
+      is_default: formData.get('is_default') === 'on'
+    };
+
+    try {
+      if (currentAction === 'create') {
+        await apiCall('/addresses/', 'POST', addressData);
+      } else {
+        await apiCall(`/addresses/${currentAddressId}/`, 'PUT', addressData);
+      }
+
+      addressModal.hide();
+      await loadAddresses(); // Reload addresses
+      resetAddressForm();
+      showAddressMessage(`Address ${currentAction === 'create' ? 'created' : 'updated'} successfully!`, 'success');
+    } catch (error) {
+      console.error('Error saving address:', error);
+      showAddressMessage('Failed to save address: ' + (error.detail || error.message), 'error');
+    }
+  }
+
+  // Event Listeners
   profileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const formData = new FormData(e.target);
 
-    // Clear messages
-    errorDiv.style.display = 'none';
-    successDiv.style.display = 'none';
+    profileErrorDiv.style.display = 'none';
+    profileSuccessDiv.style.display = 'none';
 
-    // Show loading
     submitBtn.disabled = true;
     submitBtn.textContent = 'Updating...';
 
@@ -114,21 +431,28 @@ document.addEventListener('DOMContentLoaded', async function() {
         last_name: formData.get('last_name')
       };
 
-      // ✅ Use correct endpoint: /api/users/profile/
       await apiCall('/users/profile/', 'PATCH', data);
-
-      successDiv.textContent = 'Profile updated successfully!';
-      successDiv.style.display = 'block';
-
+      profileSuccessDiv.textContent = 'Profile updated successfully!';
+      profileSuccessDiv.style.display = 'block';
     } catch (error) {
       console.error('Error updating profile:', error);
-      errorDiv.textContent = 'Failed to update profile: ' + (error.detail || error.message);
-      errorDiv.style.display = 'block';
+      profileErrorDiv.textContent = 'Failed to update profile: ' + (error.detail || error.message);
+      profileErrorDiv.style.display = 'block';
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Update Profile';
     }
   });
+
+  // Address modal events
+  document.querySelector('[data-bs-target="#addressModal"]').addEventListener('click', resetAddressForm);
+
+  saveAddressBtn.addEventListener('click', saveAddress);
+  confirmDeleteBtn.addEventListener('click', deleteAddress);
+
+  // Initialize
+  await loadProfile();
+  await loadAddresses();
 });
 </script>
 {% endblock %}

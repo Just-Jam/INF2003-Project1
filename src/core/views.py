@@ -1,8 +1,9 @@
 # core/views.py
 from django.contrib.auth.decorators import user_passes_test
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -22,9 +23,33 @@ from django.shortcuts import redirect
 from django.contrib import messages
 
 from .mongo.unified_repositories import UnifiedProductRepository
+from functools import wraps
+from .models import Address
 
 #Get your custom User model
 User = get_user_model()
+
+def admin_required(function=None):
+    """Decorator to ensure user is admin/superuser"""
+    actual_decorator = user_passes_test(
+        lambda u: u.is_authenticated and (u.is_staff or u.is_superuser),
+        login_url='/login/'
+    )
+    if function:
+        return actual_decorator(function)
+    return actual_decorator
+
+def admin_required_api(view_func):
+    """Decorator for API views to ensure user is admin/superuser"""
+    @wraps(view_func)
+    def _wrapped_view(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {'detail': 'You do not have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return view_func(self, request, *args, **kwargs)
+    return _wrapped_view
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -263,15 +288,6 @@ class LogoutView(APIView):
 
 
 
-def admin_required(function=None):
-    """Decorator to ensure user is admin/superuser"""
-    actual_decorator = user_passes_test(
-        lambda u: u.is_authenticated and (u.is_staff or u.is_superuser),
-        login_url='/login/'
-    )
-    if function:
-        return actual_decorator(function)
-    return actual_decorator
 
 
 @admin_required
@@ -549,3 +565,165 @@ class UnifiedSearchView(APIView):
                 {'error': f'Search failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+# API ViewSet for addresses
+class AddressListCreateAPIView(APIView):
+    """
+    API endpoints for listing and creating addresses
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Get queryset based on user role"""
+        if self.request.user.is_staff or self.request.user.is_superuser:
+            return Address.objects.all().order_by('user', '-is_default', 'city')
+        return Address.objects.filter(user=self.request.user).order_by('-is_default', 'city')
+
+    def get(self, request):
+        """List addresses - user sees own, admin sees all"""
+        addresses = self.get_queryset()
+        serializer = AddressSerializer(addresses, many=True, context={'request': request})  # Add context
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new address - users can only create for themselves"""
+        serializer = AddressSerializer(data=request.data, context={'request': request})  # Add context
+        if serializer.is_valid():
+            address = serializer.save()  # Let serializer handle user assignment
+
+            # If created as default, clear other defaults for that user
+            if address.is_default:
+                Address.objects.filter(user=address.user).exclude(pk=address.pk).update(is_default=False)
+
+            return Response(AddressSerializer(address, context={'request': request}).data,
+                            status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AddressDetailAPIView(APIView):
+    """
+    API endpoints for retrieving, updating, and deleting specific addresses
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, address_id):
+        """Helper method to get address with proper permission checking"""
+        address = get_object_or_404(Address, address_id=address_id)
+
+        # Users can only access their own addresses unless they're admin
+        if not self.request.user.is_staff and not self.request.user.is_superuser:
+            if address.user != self.request.user:
+                raise PermissionDenied("You can only access your own addresses.")
+
+        return address
+
+    def get(self, request, address_id):
+        """Retrieve a specific address"""
+        address = self.get_object(address_id)
+        serializer = AddressSerializer(address, context={'request': request})  # Add context
+        return Response(serializer.data)
+
+    def put(self, request, address_id):
+        """Update a specific address (full update)"""
+        address = self.get_object(address_id)
+        serializer = AddressSerializer(address, data=request.data, context={'request': request})  # Add context
+        if serializer.is_valid():
+            updated_address = serializer.save()
+
+            # If updated to default, clear other defaults for that user
+            if updated_address.is_default:
+                Address.objects.filter(user=updated_address.user).exclude(pk=updated_address.pk).update(
+                    is_default=False)
+
+            return Response(AddressSerializer(updated_address, context={'request': request}).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, address_id):
+        """Partial update of a specific address"""
+        address = self.get_object(address_id)
+        serializer = AddressSerializer(address, data=request.data, partial=True,
+                                       context={'request': request})  # Add context
+        if serializer.is_valid():
+            updated_address = serializer.save()
+
+            # If updated to default, clear other defaults for that user
+            if updated_address.is_default:
+                Address.objects.filter(user=updated_address.user).exclude(pk=updated_address.pk).update(
+                    is_default=False)
+
+            return Response(AddressSerializer(updated_address, context={'request': request}).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, address_id):
+        """Delete a specific address"""
+        address = self.get_object(address_id)
+        address.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class SetDefaultAddressAPIView(APIView):
+    """
+    API endpoint to set an address as default
+    - Users can only set their own addresses as default
+    - Admins can set any address as default
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, address_id):
+        """Set a specific address as default"""
+        address = get_object_or_404(Address, address_id=address_id)
+
+        # Users can only set their own addresses as default unless they're admin
+        if not request.user.is_staff and not request.user.is_superuser:
+            if address.user != request.user:
+                return Response(
+                    {'detail': 'You can only set your own addresses as default.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        # Clear all other defaults for that user and set this one as default
+        Address.objects.filter(user=address.user).exclude(pk=address.pk).update(is_default=False)
+        address.is_default = True
+        address.save(update_fields=['is_default'])
+
+        return Response({
+            'success': True,
+            'detail': 'Address set as default',
+            'address': AddressSerializer(address).data
+        })
+
+
+class AdminAddressManagementAPIView(APIView):
+    """
+    Admin-only endpoints for address management
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @admin_required_api
+    def get(self, request, user_id=None):
+        """Admin: Get all addresses or addresses for a specific user"""
+        if user_id:
+            addresses = Address.objects.filter(user__id=user_id).order_by('-is_default', 'city')
+        else:
+            addresses = Address.objects.all().order_by('user', '-is_default', 'city')
+
+        serializer = AddressSerializer(addresses, many=True)
+        return Response(serializer.data)
+
+    @admin_required_api
+    def post(self, request):
+        """Admin: Create an address for any user"""
+        serializer = AddressSerializer(data=request.data)
+        if serializer.is_valid():
+            address = serializer.save()
+
+            # If created as default, clear other defaults for that user
+            if address.is_default:
+                Address.objects.filter(user=address.user).exclude(pk=address.pk).update(is_default=False)
+
+            return Response(AddressSerializer(address).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+

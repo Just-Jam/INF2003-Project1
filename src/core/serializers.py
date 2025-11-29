@@ -1,9 +1,12 @@
 # core/serializers.py
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Address
 from .mongo.mongo_repositories import product_repo
+from .order_service import OrderService
 
 User = get_user_model()
 
@@ -109,13 +112,74 @@ class StaffUserSerializer(serializers.ModelSerializer):
         return user
 
 
+class AddressSerializer(serializers.ModelSerializer):
+    address_id = serializers.UUIDField(read_only=True)
+    user = serializers.UUIDField(source='user.id', read_only=True)
+
+    class Meta:
+        model = Address
+        fields = (
+            'address_id',
+            'user',
+            'street',
+            'city',
+            'state',
+            'zip_code',
+            'country',
+            'is_default',
+            'address_type',
+        )
+        read_only_fields = ('address_id', 'user')
+
+    def validate_address_type(self, value):
+        allowed = [choice[0] for choice in Address.ADDRESS_TYPES]
+        if value not in allowed:
+            raise serializers.ValidationError("Invalid address_type")
+        return value
+
+    def validate_zip_code(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("zip_code is required")
+        return value.strip()
+
+    def validate(self, data):
+        """
+        Additional validation that requires multiple fields
+        """
+        required_fields = ['street', 'city', 'state', 'zip_code', 'country']
+        for field in required_fields:
+            if field not in data or not data[field] or not str(data[field]).strip():
+                raise serializers.ValidationError({field: f"{field.replace('_', ' ').title()} is required"})
+        return data
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authenticated request required")
+
+        user = request.user
+        is_default = validated_data.get('is_default', False)
+
+        # Create the address
+        address = Address.objects.create(user=user, **validated_data)
+
+        return address
+
+    def update(self, instance, validated_data):
+        """
+        Custom update method
+        """
+        return super().update(instance, validated_data)
+
+
+
 # serializers.py - Add these serializers
 class OrderItemCreateSerializer(serializers.Serializer):
     product_sku = serializers.CharField(max_length=50)
     quantity = serializers.IntegerField(min_value=1)
 
     def validate_product_sku(self, value):
-        """Validate product exists in MongoDB"""
+        """Ensure product exists and is active in MongoDB."""
         product = product_repo.get_product_by_sku(value)
         if not product:
             raise serializers.ValidationError("Product with this SKU does not exist")
@@ -124,36 +188,81 @@ class OrderItemCreateSerializer(serializers.Serializer):
         return value
 
 
+# OrderCreateSerializer
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemCreateSerializer(many=True)
+    shipping_address = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all())
+    billing_address = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all())
 
     class Meta:
         model = Order
         fields = ['shipping_address', 'billing_address', 'items']
 
-    def validate(self, data):
-        """Validate the entire order"""
-        items_data = data.get('items', [])
+    def validate_shipping_address(self, value):
+        user = self.context['request'].user
+        if value.user != user:
+            raise serializers.ValidationError("Shipping address must belong to the authenticated user")
+        if value.address_type not in ('shipping', 'both'):
+            raise serializers.ValidationError("Address is not a shipping address")
+        return value
 
+    def validate_billing_address(self, value):
+        user = self.context['request'].user
+        if value.user != user:
+            raise serializers.ValidationError("Billing address must belong to the authenticated user")
+        if value.address_type not in ('billing', 'both'):
+            raise serializers.ValidationError("Address is not a billing address")
+        return value
+
+    def validate(self, data):
+        """Validate items and attach current product price/name for order creation."""
+        items_data = data.get('items', [])
         if not items_data:
             raise serializers.ValidationError("Order must contain at least one item")
 
-        # Validate items against MongoDB
-        is_valid, errors, _ = OrderService.validate_order_items(items_data)
-        if not is_valid:
-            raise serializers.ValidationError(errors)
+        enriched_items = []
+        errors = {}
+        for idx, item in enumerate(items_data):
+            sku = item.get('product_sku')
+            product = product_repo.get_product_by_sku(sku)
+            if not product:
+                errors[idx] = f"Product {sku} does not exist"
+                continue
+            if not product.get('is_active', False):
+                errors[idx] = f"Product {sku} is not active"
+                continue
 
+            # attach unit_price and product_name for downstream create
+            unit_price = Decimal(str(product.get('price', 0)))
+            enriched = {
+                'product_sku': sku,
+                'quantity': item.get('quantity'),
+                'unit_price': unit_price,
+                'product_name': product.get('name')
+            }
+            enriched_items.append(enriched)
+
+        if errors:
+            raise serializers.ValidationError({'items': errors})
+
+        # Optionally still use OrderService.validate_order_items if you have additional rules
+        is_valid, svc_errors, _ = OrderService.validate_order_items([{'product_sku': i['product_sku'], 'quantity': i['quantity']} for i in enriched_items])
+        if not is_valid:
+            raise serializers.ValidationError({'items': svc_errors})
+
+        # replace items in validated data with enriched items used by create()
+        data['items'] = enriched_items
         return data
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         user = self.context['request'].user
-
         try:
             order = OrderService.create_order(validated_data, user, items_data)
             return order
         except ValueError as e:
             raise serializers.ValidationError(str(e))
+
 
 
 class OrderItemSerializer(serializers.ModelSerializer):

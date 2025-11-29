@@ -1,0 +1,2 @@
+INSERT INTO addresses (user_id, street, city, state, zip_code, country, is_default, address_type)
+VALUES ('7c258ba1-3ca5-4ce3-93c0-0004162aada8', '123 Main Street', 'New York', 'NY', '10001', 'US', true, 'both');

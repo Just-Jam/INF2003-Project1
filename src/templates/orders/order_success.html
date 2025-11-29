@@ -1,0 +1,28 @@
+<!-- templates/orders/order_success.html -->
+{% extends 'base.html' %}
+
+{% block title %}Order Successful - E-Shop{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="card text-center shadow-sm">
+      <div class="card-body">
+        <h3 class="card-title text-success mb-3">Thank You for Your Order!</h3>
+        <p class="mb-1">
+          Your order ID is <strong>#{{ order.id }}</strong>.
+        </p>
+        <p class="text-muted mb-3">
+          A confirmation has been recorded in the system.
+        </p>
+        <a href="{% url 'product_list' %}" class="btn btn-primary me-2">
+          Continue Shopping
+        </a>
+        <a href="{% url 'profile' %}" class="btn btn-outline-secondary">
+          View My Orders
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
