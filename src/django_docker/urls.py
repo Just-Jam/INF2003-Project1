@@ -18,7 +18,7 @@ Including another URLconf
 
 # django_project/urls.py
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from core.views import (
     logout_view,
@@ -32,7 +32,7 @@ from core.views import (
     order_create,
     order_edit,
     admin_order_list,
-    admin_order_detail
+    admin_order_detail,
 )
 
 urlpatterns = [
@@ -44,6 +44,11 @@ urlpatterns = [
     path("change-password/", TemplateView.as_view(template_name="auth/change_password.html"), name="change_password"),
     path("deactivate/", TemplateView.as_view(template_name="auth/deactivate.html"), name="deactivate"),
     path("logout/", logout_view, name="logout"),
+
+    path('products/', TemplateView.as_view(template_name="products/product_list.html"), name='product-list-page'),
+    path('products/<int:page>/', TemplateView.as_view(template_name="products/product_list.html"),
+         name='product-list-paginated'),
+    re_path(r'^product-details/(?P<product_id>[\w-]+)/$', TemplateView.as_view(template_name="products/product_details.html"), name='product-detail'),
 
     # Admin pages (using actual view functions with authentication)
     path("admin/", admin_dashboard, name="admin_home"),

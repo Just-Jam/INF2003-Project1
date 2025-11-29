@@ -1,7 +1,31 @@
 # core/urls.py
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import DefaultRouter, SimpleRouter
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.reverse import reverse
+
 from .views import *
+
+# This function displays API endpoints in the root /api/ URL
+@api_view(['GET'])
+def api_root(request, format=None):
+    return Response({
+        #hardcoded URLs)
+        'users': request.build_absolute_uri('/api/users/'),
+        'orders': request.build_absolute_uri('/api/orders/'),
+        'admin-orders': request.build_absolute_uri('/api/admin/orders/'),
+        'register': request.build_absolute_uri('/api/auth/register/'),
+        'login': request.build_absolute_uri('/api/auth/login/'),
+        'logout': request.build_absolute_uri('/api/auth/logout/'),
+        'profile': request.build_absolute_uri('/api/users/profile/'),
+        'change-password': request.build_absolute_uri('/api/users/change-password/'),
+        'deactivate': request.build_absolute_uri('/api/users/deactivate/'),
+        'products': request.build_absolute_uri('/api/products/'),
+        'products-search': request.build_absolute_uri('/api/products/search/'),
+        'addresses': request.build_absolute_uri('/api/addresses/'),
+        'admin-addresses': request.build_absolute_uri('/api/admin/addresses/'),
+    })
 
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
@@ -14,7 +38,10 @@ router.register(r'admin/orders', AdminOrderViewSet, basename='admin-order')
 # ALL urls preceded by /api/
 urlpatterns = [
     # Include router URLs
+
+    path('', api_root, name='api-root'),
     path('', include(router.urls)),
+
 
     # Explicit API endpoints (alternative to viewset actions)
     path('auth/register/', RegisterView.as_view(), name='api-register'),
@@ -27,6 +54,8 @@ urlpatterns = [
     path('products/', ProductListView.as_view(), name='product-list'),
     path('products/<int:page>/', ProductListView.as_view(), name='product-list-paginated'),
     path('products/search/', UnifiedSearchView.as_view(), name='products-unified-search'),
+    path('product-details/<str:product_id>/', ProductDetailView.as_view(), name='product_detail'),
+
 
     path('populate-products/', populate_sample_products, name='populate-products'),
     path('debug-products/', debug_products, name='debug-products'),

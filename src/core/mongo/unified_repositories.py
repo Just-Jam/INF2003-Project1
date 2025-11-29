@@ -153,3 +153,40 @@ class UnifiedProductRepository:
             results.extend([{**serialize_mongo_document(item), 'source': 'fashion'} for item in fashion_results])
 
         return results
+
+
+    def get_product_by_id(self, product_id: str, source: Optional[str] = None) -> Optional[Dict]:
+        """
+        Get a single product by its _id from specified source or search all sources.
+
+        Args:
+            product_id: The MongoDB ObjectId as a string
+            source: Optional source to search ('app', 'amazon', 'fashion'). If None, searches all.
+
+        Returns:
+            Product dictionary with 'source' field added, or None if not found
+        """
+        from bson import ObjectId
+
+        try:
+            obj_id = ObjectId(product_id)
+        except Exception:
+            return None
+
+        if source == 'app' or not source:
+            product = self.app_products.find_one({'_id': obj_id, 'is_active': True})
+            if product:
+                return {**serialize_mongo_document(product), 'source': 'app'}
+
+        if source == 'amazon' or not source:
+            product = self.amazon_products.find_one({'_id': obj_id})
+            if product:
+                return {**serialize_mongo_document(product), 'source': 'amazon'}
+
+        if source == 'fashion' or not source:
+            product = self.fashion_items.find_one({'_id': obj_id})
+            if product:
+                return {**serialize_mongo_document(product), 'source': 'fashion'}
+
+        return None
+

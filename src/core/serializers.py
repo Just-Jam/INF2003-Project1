@@ -343,7 +343,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True, source='order_items')  # Add source='order_items'
     user_email = serializers.EmailField(source='user.email', read_only=True)
     shipping_address_details = serializers.SerializerMethodField()
     billing_address_details = serializers.SerializerMethodField()

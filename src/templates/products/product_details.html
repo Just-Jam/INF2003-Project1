@@ -1,57 +1,93 @@
 <!-- templates/products/product_detail.html -->
 {% extends 'base.html' %}
-
-{% block title %}{{ product.name }} - E-Shop{% endblock %}
+{% load static %}
 
 {% block content %}
-<div class="row">
-  <div class="col-md-5">
-    <div class="card shadow-sm">
-      <img
-        src="{{ product.image_url|default:'/static/img/placeholder.png' }}"
-        class="card-img-top"
-        alt="{{ product.name }}"
-      >
+<div class="container mt-4">
+    <h1>Product Detail Test</h1>
+
+    <!-- Debug Info -->
+    <div class="alert alert-info" id="debugInfo">
+        <h5>Debug Information</h5>
+        <div id="debugContent">Starting...</div>
     </div>
-  </div>
 
-  <div class="col-md-7">
-    <h2>{{ product.name }}</h2>
-    <p class="text-muted">Category: {{ product.category.name }}</p>
-    <h4 class="text-primary mb-3">${{ product.price }}</h4>
-
-    <p>{{ product.description }}</p>
-
-    <p class="{% if product.stock > 0 %}text-success{% else %}text-danger{% endif %}">
-      {% if product.stock > 0 %}
-        In stock: {{ product.stock }}
-      {% else %}
-        Out of stock
-      {% endif %}
-    </p>
-
-    <form class="row g-2 align-items-center" method="post" action="{% url 'add_to_cart' product.id %}">
-    <!--<form class="row g-2 align-items-center" method="post" action="#">-->
-      {% csrf_token %}
-      <div class="col-auto">
-        <label for="quantity" class="form-label mb-0">Quantity</label>
-      </div>
-      <div class="col-auto">
-        <input
-          type="number"
-          name="quantity"
-          id="quantity"
-          class="form-control"
-          min="1"
-          value="1"
-        >
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-primary">
-          Add to Cart
-        </button>
-      </div>
-    </form>
-  </div>
+    <!-- Product will be loaded here -->
+    <div id="productContainer"></div>
 </div>
+
+<script>
+// Debug function
+function debug(message) {
+    const debugContent = document.getElementById('debugContent');
+    debugContent.innerHTML += message + '<br>';
+    console.log(message);
+}
+
+// Get product ID from URL
+function getProductIdFromUrl() {
+    const pathParts = window.location.pathname.split('/').filter(part => part);
+    const productId = pathParts[1];
+    debug('Product ID from URL: ' + productId);
+    return productId;
+}
+
+// Load product details
+function loadProductDetails() {
+    const productId = getProductIdFromUrl();
+
+    if (!productId) {
+        debug('ERROR: No product ID found');
+        return;
+    }
+
+    const apiUrl = `/api/product-details/${productId}/`;
+    debug('Fetching from: ' + apiUrl);
+
+    fetch(apiUrl)
+        .then(response => {
+            debug('Response status: ' + response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            debug('SUCCESS: Got product data');
+            console.log('Product data:', data);
+            displayProduct(data);
+        })
+        .catch(error => {
+            debug('ERROR: ' + error.message);
+        });
+}
+
+// Display product
+function displayProduct(product) {
+    const container = document.getElementById('productContainer');
+
+    const name = product.name || product.title || 'Unknown';
+    const price = product.price || '0.00';
+    const source = product.source || 'unknown';
+
+    container.innerHTML = `
+        <div class="card mt-3">
+            <div class="card-body">
+                <h3>${name}</h3>
+                <p>Price: $${price}</p>
+                <p>Source: ${source}</p>
+                <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow: auto;">
+${JSON.stringify(product, null, 2)}
+                </pre>
+            </div>
+        </div>
+    `;
+}
+
+// Start loading
+document.addEventListener('DOMContentLoaded', function() {
+    debug('Page loaded - starting product load');
+    loadProductDetails();
+});
+</script>
 {% endblock %}

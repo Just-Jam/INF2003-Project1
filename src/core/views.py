@@ -1,16 +1,20 @@
 # core/views.py
 import math
+import traceback
 
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse, Http404
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
+from django.views.generic import TemplateView
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions, generics
+from rest_framework.reverse import reverse
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -538,14 +542,25 @@ class OrderViewSet(viewsets.ModelViewSet):
             return OrderCreateSerializer
         return OrderSerializer
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """Create a new order with MongoDB product validation"""
         try:
-            return super().create(request, *args, **kwargs)
+            serializer = self.get_serializer(data=request.data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            order = serializer.save()
+
+            # Use OrderSerializer for the response, not OrderCreateSerializer
+            response_serializer = OrderSerializer(order)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
         except serializers.ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Order creation error: {str(e)}")
+            print(traceback.format_exc())
             return Response(
                 {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=True, methods=['get'])
@@ -1055,39 +1070,49 @@ class AdminAddressManagementAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# views.py
 class ProductListView(APIView):
+    def get(self, request, page=None):
+        # Get page from URL parameter or query parameter
+        page = page or int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 50))
+        category = request.GET.get('category')
+
+        repo = UnifiedProductRepository()
+        products, total_count = repo.get_all_products_paginated(
+            page=page,
+            page_size=page_size,
+            category=category
+        )
+
+        return Response({
+            'results': products,
+            'count': total_count,
+            'total_pages': math.ceil(total_count / page_size),
+            'current_page': page,
+            'page_size': page_size
+        })
+
+
+class ProductDetailView(APIView):
     """
-    Provides a paginated list of all products from all sources.
-    Can be filtered by category using a query parameter.
-    e.g., /api/products/?category=Electronics
+    API endpoint to retrieve a single product by its MongoDB _id
     """
     permission_classes = [permissions.AllowAny]
 
-    def get(self, request, page=1):
-        page_size = 50
-        category = request.query_params.get('category', None)
+    def get(self, request, product_id):
+        """
+        Get a single product by _id
+
+        Query parameters:
+        - source: Optional. Specify 'app', 'amazon', or 'fashion' to search specific collection
+        """
+        source = request.query_params.get('source')
+
         repo = UnifiedProductRepository()
+        product = repo.get_product_by_id(product_id, source=source)
 
-        try:
-            products, total_items = repo.get_all_products_paginated(
-                page=page,
-                page_size=page_size,
-                category=category
-            )
-            total_pages = math.ceil(total_items / page_size)
+        if not product:
+            raise Http404("Product not found")
 
-            return Response({
-                'count': total_items,
-                'total_pages': total_pages,
-                'current_page': page,
-                'category_filter': category,
-                'results': products
-            })
-        except Exception as e:
-            return Response(
-                {'error': f'Failed to retrieve products: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-
+        return Response(product)

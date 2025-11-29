@@ -1,6 +1,7 @@
 # Database Project with Django MongoDB, PostgreSQL using Docker
 
 
+## Setup Run The following commands below
 
 ### Start docker containers:
 ```docker-compose up --build```
@@ -13,7 +14,7 @@
 - ```docker exec django_app python manage.py migrate```
 
 ### Import MongoDB data
-1. CSV files should be placed in the `src/datasets` folder.
+1. CSV files should be placed in the `src/datasets` folder. Amazon and fashion datasets
 2. Run the following command:
 ```docker exec -ti django_app python manage.py import_mongo_data```
 

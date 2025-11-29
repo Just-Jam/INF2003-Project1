@@ -1,84 +1,293 @@
 <!-- templates/products/product_list.html -->
 {% extends 'base.html' %}
-
-{% block title %}Products - E-Shop{% endblock %}
+{% load static %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0">Products</h2>
-  <form class="d-flex" method="get">
-    <input
-      class="form-control me-2"
-      type="search"
-      placeholder="Search products..."
-      name="q"
-      value="{{ request.GET.q }}"
-    >
-    <button class="btn btn-outline-primary" type="submit">Search</button>
-  </form>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Products</h2>
+        <form class="d-flex" id="searchForm">
+            <input class="form-control me-2" type="search" placeholder="Search products..." name="q" id="searchInput">
+            <button class="btn btn-outline-primary" type="submit">Search</button>
+        </form>
+    </div>
+
+    <!-- Results Info -->
+    <div id="resultsInfo" class="alert alert-light border mb-3">
+        <small class="text-muted" id="resultsText">Loading products...</small>
+    </div>
+
+    <!-- Products Container -->
+    <div id="productsContainer" class="row g-4">
+        <!-- Products will be loaded here -->
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Product pagination" class="mt-4">
+        <ul class="pagination justify-content-center" id="paginationContainer"></ul>
+    </nav>
 </div>
 
-<!-- Example of basic filters -->
-<div class="row mb-3">
-  <div class="col-md-3">
-    <select class="form-select" name="category" form="">
-      <option value="">All Categories</option>
-      {% for category in categories %}
-        <option value="{{ category.id }}" {% if category.id|stringformat:'s' == request.GET.category %}selected{% endif %}>
-          {{ category.name }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-md-3">
-    <select class="form-select" name="sort" form="">
-      <option value="">Sort by</option>
-      <option value="price_asc">Price: Low to High</option>
-      <option value="price_desc">Price: High to Low</option>
-      <option value="newest">Newest</option>
-    </select>
-  </div>
+<div class="alert alert-info" id="debugInfo" style="display: none;">
+    <h6>Debug Information</h6>
+    <pre id="debugData"></pre>
 </div>
 
-{% if products %}
-  <div class="row g-3">
-    {% for product in products %}
-      <div class="col-6 col-md-4 col-lg-3">
-        <div class="card h-100 shadow-sm">
-          <img
-            src="{{ product.image_url|default:'/static/img/placeholder.png' }}"
-            class="card-img-top"
-            alt="{{ product.name }}"
-            style="object-fit: cover; height: 180px;"
-          >
-          <div class="card-body d-flex flex-column">
-            <h6 class="card-title">{{ product.name }}</h6>
-            <p class="card-text text-muted mb-1">
-              ${{ product.price }}
-            </p>
-            <p class="card-text small text-truncate">
-              {{ product.short_description|default:product.description|truncatechars:60 }}
-            </p>
-            <div class="mt-auto d-flex justify-content-between">
-              <a href="{% url 'product_detail' product.id %}" class="btn btn-sm btn-outline-secondary">
-                Details
-              </a>
-              <form method="post" action="{% url 'add_to_cart' product.id %}">
-              <!--<form method="post" action="#">-->
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-primary">
-                  Add to Cart
-                </button>
-              </form>
+<script>
+// Global variables
+let currentPage = 1;
+let currentSearchTerm = '';
+
+// Modify your loadProducts function to include debugging
+function loadProducts() {
+    const resultsText = document.getElementById('resultsText');
+    const container = document.getElementById('productsContainer');
+    const debugInfo = document.getElementById('debugInfo');
+    const debugData = document.getElementById('debugData');
+
+    resultsText.textContent = 'Loading products...';
+    container.innerHTML = '<div class="col-12 text-center"><div class="spinner-border"></div></div>';
+
+    const url = currentSearchTerm
+        ? `/api/products/search/?q=${encodeURIComponent(currentSearchTerm)}`
+        : `/api/products/?page=${currentPage}`;
+
+    console.log('Fetching from:', url); // Debug log
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            console.log('API Response:', data); // Debug log
+
+            // Show debug info
+<!--            debugInfo.style.display = 'block';-->
+<!--            debugData.textContent = JSON.stringify(data, null, 2);-->
+
+            displayProducts(data);
+            updatePagination(data);
+        })
+        .catch(error => {
+            resultsText.textContent = `Error: ${error.message}`;
+            container.innerHTML = '<div class="col-12 alert alert-danger">Failed to load products</div>';
+        });
+}
+
+// Display products with unified field handling
+function displayProducts(data) {
+    const container = document.getElementById('productsContainer');
+    const resultsText = document.getElementById('resultsText');
+
+    const products = data.results || [];
+    const totalCount = data.count || products.length;
+
+    resultsText.textContent = `Showing ${(currentPage * 50 - 49).toString()} - ${(currentPage * 50).toString()} of ${totalCount.toLocaleString()} products`;
+
+    if (products.length === 0) {
+        container.innerHTML = '<div class="col-12 alert alert-info">No products found</div>';
+        return;
+    }
+
+    const productsHtml = products.map((product, index) => {
+        // Unified field extraction
+        const productInfo = getProductInfo(product);
+
+        return `
+            <div class="col-6 col-md-4 col-lg-3">
+                <div class="card h-100 shadow-sm">
+                    <span class="badge ${getSourceBadgeClass(productInfo.source)} position-absolute top-0 end-0 m-2">
+                        ${productInfo.source}
+                    </span>
+                    <img src="${productInfo.image}" class="card-img-top" alt="${productInfo.name}"
+                         style="height: 200px; object-fit: cover;"
+                         onerror="this.src='{% static 'img/placeholder.png' %}'">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title">${productInfo.name}</h6>
+                        <p class="card-text text-success fw-bold">$${productInfo.price}</p>
+                        <p class="card-text small text-muted">${productInfo.description}</p>
+                        <div class="mt-auto">
+                            ${getProductActions(productInfo, product)}
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-      </div>
-    {% endfor %}
-  </div>
-{% else %}
-  <div class="alert alert-info mt-3">
-    No products found.
-  </div>
-{% endif %}
+        `;
+    }).join('');
+
+    container.innerHTML = productsHtml;
+}
+
+// Unified product information extractor
+function getProductInfo(product) {
+    // Determine source
+    const source = product.source || 'unknown';
+
+    // Extract name based on source
+    let name = 'Unknown Product';
+    if (product.name) name = product.name;
+    else if (product.title) name = product.title;
+    else if (product.brand) name = product.brand;
+
+    // Extract price based on source
+    let price = '0.00';
+    if (typeof product.price === 'number') price = product.price.toFixed(2);
+    else if (product.pricing && product.pricing.price) price = parseFloat(product.pricing.price).toFixed(2);
+    else if (product.sell_price) price = parseFloat(product.sell_price).toFixed(2);
+    else if (product.mrp) price = parseFloat(product.mrp).toFixed(2);
+
+    // Extract description
+    let description = 'No description available';
+    if (product.description) description = product.description.length > 100 ? product.description.substring(0, 100) + '...' : product.description;
+    else if (product.details) description = product.details.length > 100 ? product.details.substring(0, 100) + '...' : product.details;
+
+    // Extract image
+    let image = '{% static 'img/placeholder.png' %}';
+    if (product.image_url) image = product.image_url;
+    else if (product.imgUrl) image = product.imgUrl;
+
+    return {
+        source,
+        name,
+        price,
+        description,
+        image,
+        id: product._id || product.sku || product.asin,
+        raw: product // Keep original data for debugging
+    };
+}
+
+function getSourceBadgeClass(source) {
+    const classes = {
+        'app': 'bg-primary',
+        'amazon': 'bg-warning text-dark',
+        'fashion': 'bg-success',
+        'unknown': 'bg-secondary'
+    };
+    return classes[source] || 'bg-secondary';
+}
+
+function getProductActions(productInfo, rawProduct) {
+    if (productInfo.source === 'app') {
+        return `
+            <div class="d-flex justify-content-between">
+                <button class="btn btn-sm btn-outline-secondary" onclick="viewDetails('${productInfo.id}')">
+                    Details
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="addToCart('${productInfo.id}')">
+                    Add to Cart
+                </button>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="d-grid">
+                <button class="btn btn-sm btn-outline-primary" onclick="viewExternal('${productInfo.id}', ${JSON.stringify(rawProduct).replace(/"/g, '&quot;')})">
+                    View Details
+                </button>
+            </div>
+        `;
+    }
+}
+
+function updatePagination(data) {
+    const paginationContainer = document.getElementById('paginationContainer');
+    const totalPages = data.total_pages || 1;
+    const currentPage = data.current_page || 1;
+
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+
+    let paginationHtml = '';
+
+    // Previous button
+    if (currentPage > 1) {
+        paginationHtml += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a></li>`;
+    }
+
+    // Page numbers
+    for (let i = 1; i <= Math.min(5, totalPages); i++) {
+        paginationHtml += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="changePage(${i})">${i}</a></li>`;
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+        paginationHtml += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a></li>`;
+    }
+
+    paginationContainer.innerHTML = paginationHtml;
+}
+
+function viewDetails(productId) {
+    window.location.href = `/product-details/${productId}/`;
+}
+
+function addToCart(productId) {
+    console.log('Add to cart:', productId);
+    // Implement add to cart
+}
+
+function viewExternal(productId, product) {
+    console.log('View external:', productId, product);
+    window.location.href = `/product-details/${productId}/`;
+<!--    if (product.product_url) {-->
+<!--        window.open(product.product_url, '_blank');-->
+<!--    }-->
+}
+
+// Initialize
+// Update the initialization in your template
+document.addEventListener('DOMContentLoaded', function() {
+    // Get initial state from URL path and parameters
+    const pathParts = window.location.pathname.split('/').filter(part => part);
+    const pageFromPath = pathParts[1] ? parseInt(pathParts[1]) : 1;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageFromParams = parseInt(urlParams.get('page')) || 1;
+
+    // Prefer page from path, then from params, then default to 1
+    currentPage = pageFromPath || pageFromParams || 1;
+    currentSearchTerm = urlParams.get('q') || '';
+
+    document.getElementById('searchInput').value = currentSearchTerm;
+
+    document.getElementById('searchForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        currentSearchTerm = document.getElementById('searchInput').value;
+        currentPage = 1;
+        updateURL();
+        loadProducts();
+    });
+
+    loadProducts();
+});
+
+// Update URL function to handle both path and query parameters
+function updateURL() {
+    let newUrl = '/products/';
+
+    // Only include page in path if it's not page 1
+    if (currentPage > 1) {
+        newUrl += `${currentPage}/`;
+    }
+
+    // Add query parameters
+    const params = new URLSearchParams();
+    if (currentSearchTerm) params.set('q', currentSearchTerm);
+
+    if (params.toString()) {
+        newUrl += `?${params.toString()}`;
+    }
+
+    window.history.pushState({}, '', newUrl);
+}
+
+// Update changePage function
+function changePage(page) {
+    currentPage = page;
+    updateURL();
+    loadProducts();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
 {% endblock %}
