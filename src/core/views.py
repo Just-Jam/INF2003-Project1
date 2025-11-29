@@ -1,4 +1,6 @@
 # core/views.py
+import math
+
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -1051,5 +1053,41 @@ class AdminAddressManagementAPIView(APIView):
 
             return Response(AddressSerializer(address).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProductListView(APIView):
+    """
+    Provides a paginated list of all products from all sources.
+    Can be filtered by category using a query parameter.
+    e.g., /api/products/?category=Electronics
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, page=1):
+        page_size = 50
+        category = request.query_params.get('category', None)
+        repo = UnifiedProductRepository()
+
+        try:
+            products, total_items = repo.get_all_products_paginated(
+                page=page,
+                page_size=page_size,
+                category=category
+            )
+            total_pages = math.ceil(total_items / page_size)
+
+            return Response({
+                'count': total_items,
+                'total_pages': total_pages,
+                'current_page': page,
+                'category_filter': category,
+                'results': products
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to retrieve products: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 

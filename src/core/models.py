@@ -117,19 +117,35 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_items')
-    
-    # Reference to MongoDB product
-    product_id = models.CharField(max_length=50)
+
+    # Reference to MongoDB product (not a ForeignKey)
+    product_sku = models.CharField(
+        max_length=50,
+        default="UNKNOWN_SKU"
+    )
+    # MongoDB product reference
+    product_name = models.CharField(
+        max_length=255,
+        default="Unknown Product"  # Add default value
+    )  # Denormalized name at time of order
+    product_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0.00  # Add default value for product_price too
+    )  # Price at time of order
+
     quantity = models.IntegerField(validators=[MinValueValidator(1)])
     unit_price = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        validators=[MinValueValidator(0)]
+        validators=[MinValueValidator(0)],
+        default=0.00  # Add default for unit_price
     )
 
     class Meta:
         db_table = 'order_items'
-        unique_together = ['order', 'product_id']
+        unique_together = ['order', 'product_sku']
 
     @property
     def subtotal(self):

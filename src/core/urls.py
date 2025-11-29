@@ -23,7 +23,13 @@ urlpatterns = [
     path('users/profile/', ProfileView.as_view(), name='api-profile'),
     path('users/change-password/', ChangePasswordView.as_view(), name='api-change-password'),
     path('users/deactivate/', DeactivateAccountView.as_view(), name='api-deactivate'),
+
+    path('products/', ProductListView.as_view(), name='product-list'),
+    path('products/<int:page>/', ProductListView.as_view(), name='product-list-paginated'),
     path('products/search/', UnifiedSearchView.as_view(), name='products-unified-search'),
+
+    path('populate-products/', populate_sample_products, name='populate-products'),
+    path('debug-products/', debug_products, name='debug-products'),
 
     # User endpoints
     path('addresses/', AddressListCreateAPIView.as_view(), name='address-list-create'),
@@ -35,8 +41,8 @@ urlpatterns = [
     path('admin/addresses/', AdminAddressManagementAPIView.as_view(), name='admin-address-list'),
     path('admin/addresses/user/<int:user_id>/', AdminAddressManagementAPIView.as_view(),
          name='admin-user-addresses'),
-    path('populate-products/', populate_sample_products, name='populate-products'),
-    path('debug-products/', debug_products, name='debug-products'),
+
+
 ]
 
 # Add additional API endpoints manually:
