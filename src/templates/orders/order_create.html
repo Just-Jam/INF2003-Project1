@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Order{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Create New Order</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="POST" id="orderForm">
+        {% csrf_token %}
+        
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Addresses Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Delivery Addresses</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="shipping_address" class="form-label">Shipping Address <span class="text-danger">*</span></label>
+                            <select class="form-select" name="shipping_address" id="shipping_address" required>
+                                <option value="">Select a shipping address</option>
+                                {% for address in addresses %}
+                                    <option value="{{ address.address_id }}">
+                                        {{ address.street }}, {{ address.city }}, {{ address.state }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="billing_address" class="form-label">Billing Address <span class="text-danger">*</span></label>
+                            <select class="form-select" name="billing_address" id="billing_address" required>
+                                <option value="">Select a billing address</option>
+                                {% for address in addresses %}
+                                    <option value="{{ address.address_id }}">
+                                        {{ address.street }}, {{ address.city }}, {{ address.state }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Items Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Order Items</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="itemsContainer">
+                            <!-- Items will be added here -->
+                        </div>
+
+                        <button type="button" class="btn btn-success" onclick="addItem()">
+                            <i class="bi bi-plus"></i> Add Item
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Sidebar -->
+            <div class="col-md-4">
+                <div class="card position-sticky" style="top: 20px;">
+                    <div class="card-header">
+                        <h5>Order Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="summary">
+                            <p class="text-muted">Add items to see summary</p>
+                        </div>
+                        <hr>
+                        <div class="mb-3">
+                            <p><strong>Total:</strong> <span id="totalAmount" class="fs-5 fw-bold">$0.00</span></p>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check-circle"></i> Place Order
+                        </button>
+                        <a href="{% url 'order_list' %}" class="btn btn-secondary w-100 mt-2">Cancel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <input type="hidden" name="item_count" id="item_count" value="0">
+    </form>
+</div>
+
+{{ products|json_script:"products-data" }}
+<script>
+const productsData = JSON.parse(document.getElementById('products-data').textContent);
+let products = productsData || [];
+let itemCount = 0;
+
+function getProductOptions() {
+    if (!Array.isArray(products) || products.length === 0) {
+        return '<option value="">No products available</option>';
+    }
+    
+    return products.map(p => {
+        const sku = p.sku || '';
+        const price = parseFloat(p.price) || 0;
+        const name = p.name || 'Unknown Product';
+        return `<option value="${sku}" data-price="${price}">${name} ($${price.toFixed(2)})</option>`;
+    }).join('');
+}
+
+function addItem() {
+    const container = document.getElementById('itemsContainer');
+    const index = itemCount;
+    
+    const itemHTML = `
+        <div class="card mb-3 item-card" data-index="${index}">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <label class="form-label">Product</label>
+                        <select class="form-select product-select" name="product_sku_${index}" required onchange="updateSummary()">
+                            <option value="">Select a product</option>
+                            ${getProductOptions()}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-control quantity-input" name="quantity_${index}" min="1" value="1" required onchange="updateSummary()">
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end justify-content-center">
+                        <button type="button" class="btn btn-sm" onclick="removeItem(${index})" title="Remove item">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', itemHTML);
+    itemCount++;
+    document.getElementById('item_count').value = itemCount;
+    updateSummary();
+}
+
+function removeItem(index) {
+    document.querySelector(`.item-card[data-index="${index}"]`).remove();
+    updateSummary();
+}
+
+function updateSummary() {
+    let total = 0;
+    let itemSummary = '';
+    let itemCount = 0;
+
+    document.querySelectorAll('.item-card').forEach(card => {
+        const select = card.querySelector('.product-select');
+        const quantity = parseInt(card.querySelector('.quantity-input').value) || 0;
+        
+        if (select.value) {
+            const option = select.querySelector(`option[value="${select.value}"]`);
+            const price = parseFloat(option.getAttribute('data-price')) || 0;
+            const subtotal = price * quantity;
+            
+            total += subtotal;
+            itemCount++;
+            itemSummary += `<p>${option.text} x${quantity}</p>`;
+        }
+    });
+
+    document.getElementById('summary').innerHTML = itemSummary || '<p class="text-muted">Add items to see summary</p>';
+    document.getElementById('totalAmount').textContent = '$' + total.toFixed(2);
+}
+
+// Add first item on page load
+document.addEventListener('DOMContentLoaded', function() {
+    addItem();
+});
+</script>
+
+<style>
+.item-card {
+    background-color: #f9f9f9;
+}
+</style>
+{% endblock %}

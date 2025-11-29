@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Order - {{ order.order_id|truncatechars:8 }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Edit Order</h1>
+    <hr>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Order Items (Read-only) -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Order Items (Cannot be modified)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>SKU</th>
+                                    <th>Qty</th>
+                                    <th>Unit Price</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order.order_items.all %}
+                                <tr>
+                                    <td>{{ item.product_name }}</td>
+                                    <td><code>{{ item.product_sku }}</code></td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>${{ item.unit_price }}</td>
+                                    <td><strong>${{ item.subtotal }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Update Status Form -->
+            <form method="POST">
+                {% csrf_token %}
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Update Order Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Order Status <span class="text-danger">*</span></label>
+                            <select class="form-select" name="status" id="status" required>
+                                <option value="">Select status</option>
+                                {% for value, label in status_choices %}
+                                    <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Current status: <strong>{{ order.get_status_display }}</strong></small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Update Status
+                        </button>
+                        <a href="{% url 'order_detail' order.order_id %}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sidebar Info -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Order Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Order ID:</strong> <code>{{ order.order_id }}</code></p>
+                    <p><strong>Date:</strong> {{ order.order_date|date:"F d, Y H:i" }}</p>
+                    <p><strong>Total:</strong> <span class="fs-5 fw-bold">${{ order.total_amount }}</span></p>
+                    <p>
+                        <strong>Status:</strong><br>
+                        <span class="badge bg-{% if order.status == 'pending' %}warning{% elif order.status == 'delivered' %}success{% elif order.status == 'cancelled' %}danger{% else %}info{% endif %}">
+                            {{ order.get_status_display }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Shipping Address -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5>Shipping Address</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        {{ order.shipping_address.street }}<br>
+                        {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
+                        {{ order.shipping_address.country }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Billing Address -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5>Billing Address</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        {{ order.billing_address.street }}<br>
+                        {{ order.billing_address.city }}, {{ order.billing_address.state }} {{ order.billing_address.zip_code }}<br>
+                        {{ order.billing_address.country }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5>Actions</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'order_detail' order.order_id %}" class="btn btn-info w-100 mb-2">
+                        <i class="bi bi-eye"></i> View Order
+                    </a>
+                    <a href="{% url 'order_list' %}" class="btn btn-secondary w-100">
+                        <i class="bi bi-list"></i> All Orders
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

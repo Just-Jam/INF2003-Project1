@@ -35,6 +35,8 @@ urlpatterns = [
     path('admin/addresses/', AdminAddressManagementAPIView.as_view(), name='admin-address-list'),
     path('admin/addresses/user/<int:user_id>/', AdminAddressManagementAPIView.as_view(),
          name='admin-user-addresses'),
+    path('populate-products/', populate_sample_products, name='populate-products'),
+    path('debug-products/', debug_products, name='debug-products'),
 ]
 
 # Add additional API endpoints manually:

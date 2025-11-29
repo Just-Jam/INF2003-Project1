@@ -47,14 +47,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
+        validated_data.update({
+            'is_staff': False,
+            'is_superuser': False,
+            'is_active': True
+        })
         user = User.objects.create_user(**validated_data)
         return user
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('user_id', 'email', 'first_name', 'last_name', 'created_at', 'last_login')
         read_only_fields = ('user_id', 'created_at', 'last_login')
+
 
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -72,6 +79,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Last name must be at least 2 characters long.")
         return value.strip()
 
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, validators=[validate_password])
@@ -88,6 +96,7 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"new_password": "New passwords don't match"})
         return data
 
+
 class DeactivateAccountSerializer(serializers.Serializer):
     password = serializers.CharField(required=True)
 
@@ -96,6 +105,7 @@ class DeactivateAccountSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Password is not correct")
         return value
+
 
 class StaffUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
@@ -174,6 +184,8 @@ class AddressSerializer(serializers.ModelSerializer):
 
 
 # serializers.py - Add these serializers
+# ========== ORDER SERIALIZERS ==========
+
 class OrderItemCreateSerializer(serializers.Serializer):
     product_sku = serializers.CharField(max_length=50)
     quantity = serializers.IntegerField(min_value=1)
@@ -188,9 +200,22 @@ class OrderItemCreateSerializer(serializers.Serializer):
         return value
 
 
-# OrderCreateSerializer
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ['order_item_id', 'product_id', 'quantity', 'unit_price', 'product_details']
+        read_only_fields = ['order_item_id']
+
+    def get_product_details(self, obj):
+        """Get full product details from MongoDB"""
+        product = product_repo.get_product_by_sku(obj.product_id)
+        return product if product else None
+
+
 class OrderCreateSerializer(serializers.ModelSerializer):
-    items = OrderItemCreateSerializer(many=True)
+    items = OrderItemCreateSerializer(many=True, required=True)
     shipping_address = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all())
     billing_address = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all())
 
@@ -288,6 +313,33 @@ class OrderItemSerializer(serializers.ModelSerializer):
                 'in_stock': product.get('stock_quantity', 0) > 0
             }
         return None
+
+        # Create order
+        order = Order.objects.create(
+            user=user,
+            shipping_address=validated_data['shipping_address'],
+            billing_address=validated_data['billing_address']
+        )
+
+        # Create order items and calculate total
+        total = 0
+        for item_data in items_data:
+            product = product_repo.get_product_by_sku(item_data['product_id'])
+            if not product:
+                order.delete()
+                raise serializers.ValidationError(f"Product {item_data['product_id']} not found")
+
+            order_item = OrderItem.objects.create(
+                order=order,
+                product_id=item_data['product_id'],
+                quantity=item_data['quantity'],
+                unit_price=product.get('price', 0)
+            )
+            total += (order_item.quantity * order_item.unit_price)
+
+        order.total_amount = total
+        order.save()
+        return order
 
 
 class OrderSerializer(serializers.ModelSerializer):
