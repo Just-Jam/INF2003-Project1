@@ -25,14 +25,22 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Password</label>
-            <input type="password" class="form-control" name="password" required
-                   placeholder="Create a password" minlength="8">
+            <div class="input-group">
+              <input type="password" class="form-control" name="password" id="registerPassword" required
+                     placeholder="Create a password" minlength="8">
+              <button class="btn btn-outline-secondary toggle-password" type="button"
+                      data-target="registerPassword">Show</button>
+            </div>
             <div class="form-text">Password must be at least 8 characters long.</div>
           </div>
           <div class="mb-3">
             <label class="form-label">Confirm Password</label>
-            <input type="password" class="form-control" name="password_confirm" required
-                   placeholder="Confirm your password">
+            <div class="input-group">
+              <input type="password" class="form-control" name="password_confirm" id="registerPasswordConfirm" required
+                     placeholder="Confirm your password">
+              <button class="btn btn-outline-secondary toggle-password" type="button"
+                      data-target="registerPasswordConfirm">Show</button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary w-100" id="submitBtn">
             Create Account
@@ -51,6 +59,19 @@
 
 {% block extra_js %}
 <script>
+function setupPasswordToggles() {
+  document.querySelectorAll('.toggle-password').forEach(button => {
+    button.addEventListener('click', () => {
+      const input = document.getElementById(button.dataset.target);
+      if (!input) return;
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      button.textContent = showing ? 'Show' : 'Hide';
+    });
+  });
+}
+setupPasswordToggles();
+
 document.getElementById('regForm').addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -76,8 +97,8 @@ document.getElementById('regForm').addEventListener('submit', async (e) => {
       password_confirm: formData.password_confirm
     });
 
-    // Success - redirect to profile page
-    window.location.href = "{% url 'profile' %}";
+    // Success - redirect to login page
+    window.location.href = "{% url 'login' %}";
 
   } catch (err) {
     // Show error message - handle different error formats

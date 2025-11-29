@@ -126,7 +126,7 @@ const auth = {
   },
 
   async changePassword(passwordData) {
-    const response = await apiCall('/users/change_password/', 'POST', passwordData);
+    const response = await apiCall('/users/change-password/', 'POST', passwordData);
     if (response.token) {
       localStorage.setItem('token', response.token);
     }

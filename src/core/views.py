@@ -1072,6 +1072,8 @@ class AdminAddressManagementAPIView(APIView):
 
 # views.py
 class ProductListView(APIView):
+    permission_classes = [permissions.AllowAny]
+
     def get(self, request, page=None):
         # Get page from URL parameter or query parameter
         page = page or int(request.GET.get('page', 1))

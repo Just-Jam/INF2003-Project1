@@ -25,7 +25,12 @@
                 <input class="form-control" name="last_name">
               </div>
             </div>
-            <button type="submit" class="btn btn-primary">Update Profile</button>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary">Update Profile</button>
+              <button type="button" class="btn btn-outline-danger ms-auto" id="deactivateBtn">
+                Deactivate Account
+              </button>
+            </div>
             <div id="profileError" class="alert alert-danger mt-3" style="display: none;"></div>
             <div id="profileSuccess" class="alert alert-success mt-3" style="display: none;"></div>
           </form>
@@ -146,6 +151,36 @@
     </div>
   </div>
 </div>
+
+<!-- Deactivate Account Modal -->
+<div class="modal fade" id="deactivateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Deactivate Account</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">
+          This will lock your account and prevent future logins while keeping your order history.
+          You can contact support to reactivate later.
+        </p>
+        <form id="deactivateForm">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Confirm password</label>
+            <input type="password" class="form-control" name="password" required>
+          </div>
+          <div id="deactivateError" class="alert alert-danger" style="display: none;"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeactivateBtn">Deactivate</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -158,11 +193,16 @@ document.addEventListener('DOMContentLoaded', async function() {
   const addressesList = document.getElementById('addressesList');
   const addressForm = document.getElementById('addressForm');
   const addressErrorDiv = document.getElementById('addressError');
-  const addressSuccessDiv = document.getElementById('addressSuccess'); // Add this line
+  const addressSuccessDiv = document.getElementById('addressSuccess');
   const addressModal = new bootstrap.Modal(document.getElementById('addressModal'));
   const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
   const saveAddressBtn = document.getElementById('saveAddressBtn');
   const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+  const deactivateBtn = document.getElementById('deactivateBtn');
+  const deactivateModal = new bootstrap.Modal(document.getElementById('deactivateModal'));
+  const deactivateForm = document.getElementById('deactivateForm');
+  const deactivateErrorDiv = document.getElementById('deactivateError');
+  const confirmDeactivateBtn = document.getElementById('confirmDeactivateBtn');
 
   let currentAddressId = null;
   let currentAction = 'create';
@@ -171,6 +211,47 @@ document.addEventListener('DOMContentLoaded', async function() {
   function getCSRFToken() {
     return document.querySelector('[name=csrfmiddlewaretoken]').value;
   }
+
+  function showDeactivateError(message) {
+    deactivateErrorDiv.textContent = message;
+    deactivateErrorDiv.style.display = 'block';
+  }
+
+  async function deactivateAccount(password) {
+    try {
+      await apiCall('/users/deactivate/', 'POST', { password });
+      if (window.auth && typeof window.auth.clearUserData === 'function') {
+        window.auth.clearUserData();
+      } else {
+        localStorage.clear();
+      }
+      alert('Account deactivated. Contact support to reactivate.');
+      window.location.href = window.URLS?.LOGIN || '/login/';
+    } catch (error) {
+      console.error('Deactivate account failed:', error);
+      showDeactivateError(error.detail || (error.password && error.password[0]) || 'Failed to deactivate account.');
+    }
+  }
+
+  deactivateBtn.addEventListener('click', () => {
+    deactivateErrorDiv.style.display = 'none';
+    deactivateForm.reset();
+    deactivateModal.show();
+  });
+
+  confirmDeactivateBtn.addEventListener('click', () => {
+    const password = deactivateForm.querySelector('input[name="password"]').value;
+    if (!password) {
+      showDeactivateError('Password is required to deactivate your account.');
+      return;
+    }
+    confirmDeactivateBtn.disabled = true;
+    confirmDeactivateBtn.textContent = 'Deactivating...';
+    deactivateAccount(password).finally(() => {
+      confirmDeactivateBtn.disabled = false;
+      confirmDeactivateBtn.textContent = 'Deactivate';
+    });
+  });
 
   // Get auth token
   function getAuthToken() {
