@@ -13,7 +13,9 @@ from .views import (
     DeactivateAccountView,
     OrderViewSet,
     AdminOrderViewSet,
-    UnifiedSearchView
+    UnifiedSearchView,
+    populate_sample_products,
+    debug_products
 )
 
 router = DefaultRouter()
@@ -36,6 +38,8 @@ urlpatterns = [
     path('users/change-password/', ChangePasswordView.as_view(), name='api-change-password'),
     path('users/deactivate/', DeactivateAccountView.as_view(), name='api-deactivate'),
     path('products/search/', UnifiedSearchView.as_view(), name='products-unified-search'),
+    path('populate-products/', populate_sample_products, name='populate-products'),
+    path('debug-products/', debug_products, name='debug-products'),
 ]
 
 # Add additional API endpoints manually:

@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 
 from .serializers import *
+from .models import Order, OrderItem, Address
 
 from django.contrib.auth import authenticate, get_user_model, login as django_login
 from django.contrib.auth import logout as auth_logout
@@ -22,6 +23,7 @@ from django.shortcuts import redirect
 from django.contrib import messages
 
 from .mongo.unified_repositories import UnifiedProductRepository
+from .mongo.mongo_repositories import product_repo
 
 #Get your custom User model
 User = get_user_model()
@@ -371,6 +373,69 @@ def toggle_user_status(request, user_id):
 
 
 @admin_required
+def admin_order_list(request):
+    """Admin view to see all orders from all users"""
+    orders = Order.objects.all().prefetch_related('order_items', 'user').order_by('-order_date')
+    
+    # Search functionality
+    search_query = request.GET.get('search', '')
+    if search_query:
+        orders = orders.filter(
+            Q(order_id__icontains=search_query) |
+            Q(user__email__icontains=search_query) |
+            Q(user__first_name__icontains=search_query) |
+            Q(user__last_name__icontains=search_query) |
+            Q(status__icontains=search_query)
+        )
+    
+    # Filter by status
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+    
+    # Pagination
+    paginator = Paginator(orders, 20)  # 20 orders per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'orders': page_obj.object_list,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'status_choices': Order.ORDER_STATUS,
+        'total_count': orders.count(),
+    }
+    return render(request, 'admin/order_management.html', context)
+
+@admin_required
+def admin_order_detail(request, order_id):
+    """Admin view to see detailed order information"""
+    order = get_object_or_404(Order, order_id=order_id)
+    
+    # Add product details from MongoDB for each order item
+    items_with_products = []
+    for item in order.order_items.all():
+        product = product_repo.get_product_by_sku(item.product_id)
+        item_with_product = {
+            'order_item': item,
+            'product_name': product.get('name', 'Unknown Product') if product else 'Unknown Product',
+            'product_sku': product.get('sku', item.product_id) if product else item.product_id,
+            'quantity': item.quantity,
+            'unit_price': item.unit_price,
+            'subtotal': item.quantity * item.unit_price,
+            'product_id': item.product_id
+        }
+        items_with_products.append(item_with_product)
+    
+    context = {
+        'order': order,
+        'items': items_with_products,
+        'is_admin_view': True
+    }
+    return render(request, 'admin/order_detail.html', context)
+
+@admin_required
 def create_user(request):
     """Create new user (admin only)"""
     if request.method == 'POST':
@@ -475,15 +540,15 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def by_product(self, request):
         """Get orders containing a specific MongoDB product"""
-        product_sku = request.query_params.get('product_sku')
-        if not product_sku:
+        product_id = request.query_params.get('product_id')
+        if not product_id:
             return Response(
-                {'error': 'product_sku parameter is required'},
+                {'error': 'product_id parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         orders = Order.objects.filter(
-            order_items__product_sku=product_sku,
+            order_items__product_id=product_id,
             user=request.user
         ).distinct()
 
@@ -549,3 +614,264 @@ class UnifiedSearchView(APIView):
                 {'error': f'Search failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ========== TEMPLATE VIEWS FOR ORDERS ==========
+from django.contrib.auth.decorators import login_required
+
+@login_required(login_url='/login/')
+def order_list(request):
+    """Display paginated list of user's orders"""
+    orders = Order.objects.filter(user=request.user).prefetch_related('order_items').order_by('-order_date')
+    
+    paginator = Paginator(orders, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'orders': page_obj.object_list,
+        'total_orders': orders.count()
+    }
+    return render(request, 'orders/order_list.html', context)
+
+
+@login_required(login_url='/login/')
+def order_detail(request, order_id):
+    """Display detailed view of a specific order"""
+    order = get_object_or_404(Order, order_id=order_id, user=request.user)
+    
+    # Add product details from MongoDB for each order item
+    items_with_products = []
+    for item in order.order_items.all():
+        product = product_repo.get_product_by_sku(item.product_id)
+        # Create a dictionary with item info + product details
+        item_with_product = {
+            'order_item': item,
+            'product_name': product.get('name', 'Unknown Product') if product else 'Unknown Product',
+            'product_sku': product.get('sku', item.product_id) if product else item.product_id,
+            'quantity': item.quantity,
+            'unit_price': item.unit_price,
+            'subtotal': item.quantity * item.unit_price,
+            'product_id': item.product_id
+        }
+        items_with_products.append(item_with_product)
+    
+    context = {
+        'order': order,
+        'items': items_with_products
+    }
+    return render(request, 'orders/order_detail.html', context)
+
+
+@login_required(login_url='/login/')
+def order_create(request):
+    """Create a new order"""
+    if request.method == 'POST':
+        shipping_address_id = request.POST.get('shipping_address')
+        billing_address_id = request.POST.get('billing_address')
+        
+        try:
+            shipping_address = Address.objects.get(address_id=shipping_address_id, user=request.user)
+            billing_address = Address.objects.get(address_id=billing_address_id, user=request.user)
+        except Address.DoesNotExist:
+            messages.error(request, 'Invalid address selected')
+            return redirect('order_create')
+        
+        # Collect items from form
+        items = []
+        item_count = int(request.POST.get('item_count', 0))
+        
+        for i in range(item_count):
+            product_id = request.POST.get(f'product_sku_{i}')
+            quantity_str = request.POST.get(f'quantity_{i}')
+            
+            if product_id and quantity_str:
+                try:
+                    quantity = int(quantity_str)
+                    if quantity > 0:
+                        items.append({'product_id': product_id, 'quantity': quantity})
+                except (ValueError, TypeError):
+                    continue
+        
+        if not items:
+            messages.error(request, 'Order must contain at least one item')
+            return redirect('order_create')
+        
+        # Create order using serializer
+        serializer = OrderCreateSerializer(
+            data={
+                'shipping_address': shipping_address_id,
+                'billing_address': billing_address_id,
+                'items': items
+            },
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            order = serializer.save()
+            messages.success(request, f'Order {order.order_id} created successfully!')
+            return redirect('order_detail', order_id=order.order_id)
+        else:
+            for error in serializer.errors.values():
+                messages.error(request, str(error))
+            return redirect('order_create')
+    
+    # GET request - show form
+    user_addresses = Address.objects.filter(user=request.user)
+    
+    # Debug: Check if products exist in MongoDB directly
+    from .mongo.connection import mongo_db
+    products_col = mongo_db['products']
+    direct_count = products_col.count_documents({'is_active': True})
+    print(f"DEBUG: Direct MongoDB count: {direct_count}")
+    
+    products = product_repo.get_all_products(filters={'is_active': True})
+    print(f"DEBUG: Products from repo: {len(products) if products else 0}")
+    if products:
+        print(f"DEBUG: First product: {products[0]}")
+    
+    # Convert MongoDB documents to JSON-serializable format
+    products_list = []
+    if products:
+        for product in products:
+            # Convert ObjectId to string if present
+            product_dict = {
+                'sku': product.get('sku', ''),
+                'name': product.get('name', ''),
+                'price': float(product.get('price', 0)),
+                'stock_quantity': product.get('stock_quantity', 0),
+                'description': product.get('description', ''),
+                'is_active': product.get('is_active', True)
+            }
+            products_list.append(product_dict)
+    
+    context = {
+        'addresses': user_addresses,
+        'products': products_list
+    }
+    return render(request, 'orders/order_create.html', context)
+
+
+def debug_products(request):
+    """Debug endpoint to check products"""
+    from .mongo.connection import mongo_db
+    
+    # Check direct MongoDB
+    products_col = mongo_db['products']
+    direct_products = list(products_col.find({'is_active': True}))
+    
+    # Check via repository
+    repo_products = product_repo.get_all_products(filters={'is_active': True})
+    
+    return JsonResponse({
+        'direct_mongo_count': len(direct_products),
+        'repo_count': len(repo_products) if repo_products else 0,
+        'direct_products': [{'sku': p.get('sku'), 'name': p.get('name'), 'price': p.get('price')} for p in direct_products[:3]],
+        'repo_products': repo_products[:3] if repo_products else []
+    })
+
+def populate_sample_products(request):
+    """Quick endpoint to populate sample products"""
+    from .mongo.connection import mongo_db
+    from datetime import datetime
+    
+    products_col = mongo_db['products']
+    
+    # Sample products
+    products = [
+        {
+            'sku': 'PROD001',
+            'name': 'Premium Laptop',
+            'description': 'High-performance laptop for professionals',
+            'price': 999.99,
+            'stock_quantity': 10,
+            'is_active': True,
+            'categories': [],
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        },
+        {
+            'sku': 'PROD002', 
+            'name': 'Wireless Mouse',
+            'description': 'Ergonomic wireless mouse with precision tracking',
+            'price': 29.99,
+            'stock_quantity': 50,
+            'is_active': True,
+            'categories': [],
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        },
+        {
+            'sku': 'PROD003',
+            'name': 'Bluetooth Headphones',
+            'description': 'Premium noise-cancelling headphones',
+            'price': 149.99,
+            'stock_quantity': 25,
+            'is_active': True,
+            'categories': [],
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        },
+        {
+            'sku': 'PROD004',
+            'name': 'Wireless Keyboard',
+            'description': 'Mechanical keyboard with RGB lighting',
+            'price': 79.99,
+            'stock_quantity': 30,
+            'is_active': True,
+            'categories': [],
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+    ]
+    
+    # Clear existing and insert new
+    products_col.delete_many({})
+    result = products_col.insert_many(products)
+    
+    # Create indexes
+    try:
+        products_col.create_index('sku', unique=True)
+        products_col.create_index('name')
+        products_col.create_index('is_active')
+    except:
+        pass  # Indexes might already exist
+    
+    # Verify the products were actually inserted
+    count = products_col.count_documents({'is_active': True})
+    
+    # Also test the product_repo
+    repo_products = product_repo.get_all_products(filters={'is_active': True})
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'Successfully added {len(result.inserted_ids)} products',
+        'products_inserted': len(products),
+        'direct_mongo_count': count,
+        'repo_count': len(repo_products) if repo_products else 0,
+        'sample_product': repo_products[0] if repo_products else None
+    })
+
+@admin_required
+def order_edit(request, order_id):
+    """Edit an existing order - ADMIN ONLY"""
+    order = get_object_or_404(Order, order_id=order_id)  # Removed user filter - admins can edit any order
+    
+    if request.method == 'POST':
+        status_new = request.POST.get('status')
+        
+        if status_new and status_new in dict(Order.ORDER_STATUS):
+            order.status = status_new
+            order.save()
+            messages.success(request, f'Order {order.order_id} status updated to {status_new}')
+        else:
+            messages.error(request, 'Invalid status')
+        
+        return redirect('order_detail', order_id=order.order_id)
+    
+    context = {
+        'order': order,
+        'status_choices': Order.ORDER_STATUS
+    }
+    return render(request, 'orders/order_edit.html', context)

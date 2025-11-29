@@ -26,7 +26,13 @@ from core.views import (
     user_management,
     user_detail,
     create_user,
-    toggle_user_status
+    toggle_user_status,
+    order_list,
+    order_detail,
+    order_create,
+    order_edit,
+    admin_order_list,
+    admin_order_detail
 )
 
 urlpatterns = [
@@ -45,6 +51,14 @@ urlpatterns = [
     path("admin/users/create/", create_user, name="admin_create_user"),
     path("admin/users/<uuid:user_id>/", user_detail, name="admin_user_detail"),
     path("admin/users/<uuid:user_id>/toggle-status/", toggle_user_status, name="admin_toggle_user_status"),
+    path("admin/orders/", admin_order_list, name="admin_order_list"),
+    path("admin/orders/<uuid:order_id>/", admin_order_detail, name="admin_order_detail"),
+
+    # Order pages (using actual view functions with authentication)
+    path("orders/", order_list, name="order_list"),
+    path("orders/<uuid:order_id>/", order_detail, name="order_detail"),
+    path("orders/create/", order_create, name="order_create"),
+    path("orders/<uuid:order_id>/edit/", order_edit, name="order_edit"),
 
     # Django admin (using different path to avoid conflict with custom admin)
     path("django-admin/", admin.site.urls),
